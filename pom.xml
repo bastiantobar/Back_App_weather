@@ -8,69 +8,47 @@
 		<version>3.4.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
+
 	<groupId>com.example</groupId>
 	<artifactId>back-app-weather</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>rest-app-weather</name>
 	<description>Demo project for Spring Boot</description>
+
 	<properties>
-		<!-- Encode -->
 		<encoding>UTF-8</encoding>
 		<project.build.sourceEncoding>${encoding}</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>${encoding}</project.reporting.outputEncoding>
-		<project.resources.sourceEncoding>${encoding}</project.resources.sourceEncoding>
-		<!-- Java -->
 		<java.version>17</java.version>
-		<deploy>${project.artifactId}-${project.version}</deploy>
-		<!-- Maven -->
-		<maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
-		<!-- Maven. integration test -->
-		<maven-surefire-plugin.version>3.1.2</maven-surefire-plugin.version>
-		<maven-failsafe-plugin.version>3.1.2</maven-failsafe-plugin.version>
-		<!-- coverage report -->
+		<maven.surefire.plugin.version>3.1.2</maven.surefire.plugin.version>
+		<maven.failsafe.plugin.version>3.1.2</maven.failsafe.plugin.version>
 		<jacoco.version>0.8.10</jacoco.version>
-		<!-- OpenAPI -->
 		<springdoc-openapi-starter-webflux-ui.version>2.1.0</springdoc-openapi-starter-webflux-ui.version>
 	</properties>
 
-
-
-
-
 	<dependencies>
-		<!-- Web -->
+		<!-- WebFlux -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webflux</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
+
+
+
+		<!-- Reactor Test -->
 		<dependency>
 			<groupId>io.projectreactor</groupId>
 			<artifactId>reactor-test</artifactId>
 		</dependency>
-		<!-- OpenAPI http://localhost:8080/swagger-ui.html -->
-		<!-- OpenAPI http://localhost:8080/v3/api-docs -->
+
+		<!-- OpenAPI para WebFlux -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
 			<version>${springdoc-openapi-starter-webflux-ui.version}</version>
 		</dependency>
-		<!-- Spring Boot Starter: contiene las bases de Spring Core -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter</artifactId>
-		</dependency>
 
-		<!-- Spring Boot Web: Necesario para aplicaciones RESTful -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<!-- Spring Boot DevTools: recarga en caliente para facilitar el desarrollo -->
+		<!-- Spring Boot DevTools: recarga en caliente (solo para desarrollo) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>
@@ -78,14 +56,14 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- Spring Boot Starter Test: Para pruebas unitarias y de integración -->
+		<!-- Testing -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 
-		<!-- MapStruct (opcional): Para mapear objetos DTO (si es necesario en el futuro) -->
+		<!-- MapStruct: para mapear DTOs -->
 		<dependency>
 			<groupId>org.mapstruct</groupId>
 			<artifactId>mapstruct</artifactId>
@@ -97,19 +75,14 @@
 			<version>1.5.5.Final</version>
 			<scope>provided</scope>
 		</dependency>
+
+		<!-- Lombok: para simplificar POJOs -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<version>1.18.30</version>
 			<scope>provided</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>2.1.0</version>
-		</dependency>
-
-
 	</dependencies>
 
 	<build>
@@ -141,12 +114,12 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>${maven-surefire-plugin.version}</version>
+				<version>${maven.surefire.plugin.version}</version>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>${maven-failsafe-plugin.version}</version>
+				<version>${maven.failsafe.plugin.version}</version>
 				<executions>
 					<execution>
 						<goals>
@@ -156,6 +129,7 @@
 					</execution>
 				</executions>
 			</plugin>
+
 		</plugins>
 	</build>
 
