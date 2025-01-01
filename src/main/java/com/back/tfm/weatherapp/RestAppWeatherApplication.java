@@ -1,4 +1,4 @@
-package Proyecto.back.para.aplicacion.movil.de.TFM;
+package com.back.tfm.weatherapp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

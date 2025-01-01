@@ -1,8 +1,3 @@
-# Read Me First
-The following was discovered as part of building this project:
-
-* The original package name 'Proyecto back para aplicacion movil de TFM' is invalid and this project uses 'Proyecto.back.para.aplicacion.movil.de.TFM' instead.
-
 # Getting Started
 
 ### Reference Documentation
