@@ -18,7 +18,7 @@ jobs:
         if: success() # always() failure() success()
         run: >
           mvn -B verify -DskipTests sonar:sonar
-          -Dsonar.projectKey=back-app-weather-btobar
+          -Dsonar.projectKey=back-app-weather
           -Dsonar.organization=es.upm.miw:devops-practice
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.login=$SONAR_TOKEN
