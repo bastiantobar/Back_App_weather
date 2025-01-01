@@ -1,0 +1,54 @@
+# Archivos y carpetas generales de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos generados por Maven
+target/
+*.jar
+*.war
+
+# Maven Wrapper
+.mvn/
+!mvnw
+!mvnw.cmd
+
+# Logs
+*.log
+logs/
+*.out
+
+# Configuración de IDEs
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# VS Code
+.vscode/
+
+# Configuración específica de entorno
+.env
+*.properties.local
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+
+# Archivos generados por Lombok
+*.lombok.config
+
+# Archivos y carpetas de test
+test-output/
+surefire-reports/
+
+# Base de datos embebida H2
+*.db
+
+# Archivos específicos de CI/CD
+# Ejemplo: GitHub Actions
+.github/
