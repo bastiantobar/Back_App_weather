@@ -19,7 +19,7 @@ jobs:
         run: >
           mvn -B verify -DskipTests sonar:sonar
           -Dsonar.projectKey=back-app-weather
-          -Dsonar.organization=es.upm.miw.iwvg-devops-tobar-bastian
+          -Dsonar.organization=iwvg-devops-tobar-bastian
           -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.login=$SONAR_TOKEN
         env:
