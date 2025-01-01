@@ -8,9 +8,20 @@ jobs:
     runs-on: ubuntu-latest # macos-latest macos-11 windows-2019 ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-        with: {fetch-depth: 0}
+        with: { fetch-depth: 0 }
       - uses: actions/setup-java@v1
         with:
           java-version: 17
       - name: Unit & Integration Tests
         run: mvn -B verify # -B: --batch-mode
+      - name: Sonar
+        if: success() # always() failure() success()
+        run: >
+          mvn -B verify -DskipTests sonar:sonar
+          -Dsonar.projectKey=back-app-weather-btobar
+          -Dsonar.organization=iwvg-devops-tobar-bastian
+          -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.login=$SONAR_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
