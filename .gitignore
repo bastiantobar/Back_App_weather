@@ -51,3 +51,5 @@ surefire-reports/
 
 # Archivos específicos de CI/CD
 # Ejemplo: GitHub Actions
+src/main/resources/firebase-service-account.json
+
