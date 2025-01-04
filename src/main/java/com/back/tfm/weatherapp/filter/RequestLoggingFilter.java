@@ -15,19 +15,15 @@ public class RequestLoggingFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        // Log del método HTTP y la URL
         String method = exchange.getRequest().getMethod() != null ? exchange.getRequest().getMethod().name() : "UNKNOWN";
         String path = exchange.getRequest().getPath().pathWithinApplication().value();
-        logger.warn("Solicitud: {} {}", method, path);
 
-        // Leer el cuerpo de la solicitud
-        return exchange.getRequest().getBody()
-                .doOnNext(dataBuffer -> {
-                    byte[] bodyBytes = new byte[dataBuffer.readableByteCount()];
-                    dataBuffer.read(bodyBytes);
-                    String body = new String(bodyBytes);
-                    logger.warn("Cuerpo de la solicitud: {}", body);
-                })
-                .then(chain.filter(exchange)); // Continúa con el siguiente filtro
+        logger.warn("Solicitud: {} {}", method, path);
+        exchange.getRequest().getHeaders().forEach((key, value) -> {
+            logger.warn("Encabezado: {} = {}", key, value);
+        });
+
+        return chain.filter(exchange); // Permite que WebFlux gestione el cuerpo
     }
 }
+

@@ -1,5 +1,6 @@
 package com.back.tfm.weatherapp.controller;
 
+import ch.qos.logback.classic.Logger;
 import com.back.tfm.weatherapp.dto.LoginRequestDto;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -14,8 +15,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Map;
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Endpoints for user authentication and registration")
 public class AuthController {
+    private static final Logger logger = (Logger) LoggerFactory.getLogger(AuthController.class);
 
     @PostMapping("/register")
     @Operation(
@@ -79,8 +81,7 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid credentials or authentication error", content = @Content)
     })
     public ResponseEntity<String> loginUser(@RequestBody LoginRequestDto loginRequest) {
-        Logger logger = LoggerFactory.getLogger(AuthController.class);
-
+        Logger logger = (Logger) LoggerFactory.getLogger(AuthController.class);
         logger.warn("Objeto recibido: {}", loginRequest);
         if (loginRequest != null) {
             logger.warn("Email: {}, Password: {}", loginRequest.getEmail(), loginRequest.getPassword());
@@ -115,10 +116,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Error al autenticar usuario: " + e.getMessage());
         }
     }
-
-
-
-    private String authenticateWithFirebase(String email, String password) throws Exception {
+  private String authenticateWithFirebase(String email, String password) throws Exception {
         String firebaseApiKey = "AIzaSyBQ4F2VK9t0dza3J9YX5qvx2DXtinW8u5U";
         String firebaseAuthUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + firebaseApiKey;
 
@@ -138,13 +136,4 @@ public class AuthController {
             throw new Exception("Firebase authentication failed: " + e.getMessage());
         }
     }
-    @PostMapping("/debug-login")
-    public ResponseEntity<String> debugLogin(@RequestBody String body) {
-        if (body == null || body.isEmpty()) {
-            return ResponseEntity.badRequest().body("El cuerpo de la solicitud está vacío");
-        }
-        return ResponseEntity.ok("Cuerpo recibido: " + body);
-    }
-
-
 }
