@@ -135,5 +135,7 @@ public class AuthController {
         } catch (Exception e) {
             throw new Exception("Firebase authentication failed: " + e.getMessage());
         }
+
+
     }
 }

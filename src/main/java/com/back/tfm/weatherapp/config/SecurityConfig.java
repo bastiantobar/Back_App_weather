@@ -18,7 +18,7 @@ public class SecurityConfig {
                 .withJwkSetUri("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
                 .build();
     }
-/*
+
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
@@ -30,15 +30,6 @@ public class SecurityConfig {
                         .anyExchange().permitAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt())
-                .build();
-    }*/
-    @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
-        return http
-                .csrf(csrf -> csrf.disable()) // Desactiva temporalmente CSRF
-                .authorizeExchange(exchange -> exchange
-                        .anyExchange().permitAll() // Permitir todo temporalmente
-                )
                 .build();
     }
 
