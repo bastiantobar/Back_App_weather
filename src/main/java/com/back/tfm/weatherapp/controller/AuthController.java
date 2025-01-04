@@ -1,10 +1,7 @@
 package com.back.tfm.weatherapp.controller;
 
-import ch.qos.logback.classic.Logger;
 import com.back.tfm.weatherapp.dto.LoginRequestDto;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.UserRecord;
+import com.back.tfm.weatherapp.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,20 +9,24 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
-import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Endpoints for user authentication and registration")
 public class AuthController {
-    private static final Logger logger = (Logger) LoggerFactory.getLogger(AuthController.class);
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/register")
     @Operation(
@@ -52,14 +53,10 @@ public class AuthController {
                 return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
             }
 
-            // Lógica para registrar usuario en Firebase
-            UserRecord.CreateRequest request = new UserRecord.CreateRequest()
-                    .setEmail(email)
-                    .setPassword(password);
-
-            UserRecord userRecord = FirebaseAuth.getInstance().createUser(request);
-            return ResponseEntity.ok("Usuario registrado con UID: " + userRecord.getUid());
-        } catch (FirebaseAuthException e) {
+            String userId = authService.registerUser(email, password);
+            return ResponseEntity.ok("Usuario registrado con UID: " + userId);
+        } catch (Exception e) {
+            logger.error("Error al registrar usuario: {}", e.getMessage());
             return ResponseEntity.badRequest().body("Error al registrar usuario: " + e.getMessage());
         }
     }
@@ -81,61 +78,16 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid credentials or authentication error", content = @Content)
     })
     public ResponseEntity<String> loginUser(@RequestBody LoginRequestDto loginRequest) {
-        Logger logger = (Logger) LoggerFactory.getLogger(AuthController.class);
-        logger.warn("Objeto recibido: {}", loginRequest);
-        if (loginRequest != null) {
-            logger.warn("Email: {}, Password: {}", loginRequest.getEmail(), loginRequest.getPassword());
-        } else {
-            logger.error("El objeto loginRequest es null");
-        }
-
-        // Log del objeto recibido
-        logger.warn("Datos recibidos en el cuerpo de la solicitud: {}", loginRequest);
-
-
         try {
-            // Extraer email y contraseña
-            String email = "bastiantobar.94@gmail.com";
-            String password = "password";
-
-            logger.warn("Email recibido: {}", email);
-            logger.warn("Contraseña recibida: {}", password);
-
-            if (email == null || email.isEmpty() || password == null || password.isEmpty()) {
-                logger.warn("Email o contraseña están vacíos");
+           /* if (loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
                 return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
-            }
+            }*/
 
-            // Autenticación con Firebase
-            String firebaseToken = authenticateWithFirebase(email, password);
-            logger.info("Token obtenido de Firebase: {}", firebaseToken);
-
-            return ResponseEntity.ok("Bearer " + firebaseToken);
+            String token = authService.authenticateUser("bastiantobar.94@gmail.com", "password");
+            return ResponseEntity.ok("Bearer " + token);
         } catch (Exception e) {
             logger.error("Error al autenticar usuario: {}", e.getMessage());
             return ResponseEntity.badRequest().body("Error al autenticar usuario: " + e.getMessage());
         }
-    }
-  private String authenticateWithFirebase(String email, String password) throws Exception {
-        String firebaseApiKey = "AIzaSyBQ4F2VK9t0dza3J9YX5qvx2DXtinW8u5U";
-        String firebaseAuthUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + firebaseApiKey;
-
-        RestTemplate restTemplate = new RestTemplate();
-
-        Map<String, String> request = Map.of(
-                "email", email,
-                "password", password,
-                "returnSecureToken", "true"
-        );
-
-        try {
-            // La respuesta se mapea a un HashMap
-            HashMap<String, Object> response = restTemplate.postForObject(firebaseAuthUrl, request, HashMap.class);
-            return (String) response.get("idToken"); // Extrae el token del JSON
-        } catch (Exception e) {
-            throw new Exception("Firebase authentication failed: " + e.getMessage());
-        }
-
-
     }
 }

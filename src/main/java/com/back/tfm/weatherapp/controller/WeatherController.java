@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,7 @@ public class WeatherController {
                     content = @Content(mediaType = "application/json"))
     })
     @GetMapping("/forecast")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<String>> getForecast() {
         return weatherService.getLocationForecast(40.4168, -3.7038)
                 .map(data -> ResponseEntity.ok(data))
@@ -66,6 +68,7 @@ public class WeatherController {
                     content = @Content(mediaType = "application/json"))
     })
     @GetMapping("/grafic")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ResponseEntity<byte[]>> getMeteogramAsBytes() {
         return weatherService.getMeteogramAsBytes()
                 .map(bytes -> ResponseEntity.ok()
