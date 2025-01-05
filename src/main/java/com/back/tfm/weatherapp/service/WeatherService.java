@@ -21,8 +21,11 @@ public class WeatherService {
 
     private final WebClient webClient;
 
-    public WeatherService(WebClient webClient) {
+    private final FirebaseRealtimeService firebaseRealtimeService;
+
+    public WeatherService(WebClient webClient, FirebaseRealtimeService firebaseRealtimeService) {
         this.webClient = webClient;
+        this.firebaseRealtimeService = firebaseRealtimeService;
     }
 
     public Mono<String> getLocationForecast(double lat, double lon) {
@@ -116,7 +119,20 @@ public class WeatherService {
                 });
     }
 
+    public Mono<InstantWeather> getAndPersistInstantWeather() {
+        return getInstantWeather()
+                .doOnNext(firebaseRealtimeService::saveInstantWeather); // Persiste en Firebase
+    }
 
+    public Mono<List<HourlyForecast>> getAndPersistHourlyForecast() {
+        return getHourlyForecast()
+                .doOnNext(firebaseRealtimeService::saveHourlyForecasts); // Persiste en Firebase
+    }
+
+    public Mono<WindMap> getAndPersistWindMap() {
+        return getWindSpeedMap()
+                .doOnNext(firebaseRealtimeService::saveWindMap); // Persiste en Firebase
+    }
 
 
 }
