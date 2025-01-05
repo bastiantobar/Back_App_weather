@@ -16,19 +16,16 @@ public class FirebaseConfig {
 
     @Bean
     public DatabaseReference firebaseDatabase() throws IOException {
-        // Verifica si FirebaseApp ya está inicializado
         if (FirebaseApp.getApps().isEmpty()) {
             FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase-service-account.json");
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    .setDatabaseUrl("https://base-app-weather-default-rtdb.firebaseio.com/") // Reemplaza con tu URL
+                    .setDatabaseUrl("https://base-app-weather-default-rtdb.firebaseio.com/")
                     .build();
 
             FirebaseApp.initializeApp(options);
         }
-
-        // Retorna la referencia a la base de datos
         return FirebaseDatabase.getInstance().getReference();
     }
 }
