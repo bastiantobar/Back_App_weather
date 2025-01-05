@@ -25,7 +25,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable()) // Configuración recomendada en Spring Security 6.1+
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/register", "/auth/validate").permitAll() // Endpoints públicos
-                        .pathMatchers("/weather/forecast", "/weather/grafic").authenticated() // Endpoints protegidos
+                        .pathMatchers("/weather/instant", "/weather/grafic","/weather/hourly","/weather/wind-map").authenticated() // Endpoints protegidos
                         .anyExchange().permitAll() // Otros endpoints son públicos (modifícalo según tu caso)
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt()) // Habilita validación JWT
