@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/weather/data")
+@RequestMapping("/weather")
 public class WeatherDataController {
 
     private final FirebaseRealtimeService firebaseRealtimeService;

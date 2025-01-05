@@ -13,6 +13,4 @@ import lombok.NoArgsConstructor;
 public class WindMap {
     private String type = "FeatureCollection";
     private List<WindMapPoint> features;
-
-    // Constructor, Getters y Setters
 }

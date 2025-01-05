@@ -13,8 +13,6 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Representa los datos necesarios para el mapa de velocidad del viento")
 
 public class WindMapPoint {
-    private List<Double> coordinates; // [longitude, latitude]
+    private List<Double> coordinates;
     private double windSpeed;
-
-    // Getters y Setters
 }

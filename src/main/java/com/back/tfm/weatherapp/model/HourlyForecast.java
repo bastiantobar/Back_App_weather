@@ -13,6 +13,4 @@ public class HourlyForecast {
     private double airTemperature;
     private double windSpeed;
     private double precipitationAmount;
-
-    // Getters y Setters
 }

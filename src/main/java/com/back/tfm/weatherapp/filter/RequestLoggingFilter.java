@@ -23,7 +23,7 @@ public class RequestLoggingFilter implements WebFilter {
             logger.warn("Encabezado: {} = {}", key, value);
         });
 
-        return chain.filter(exchange); // Permite que WebFlux gestione el cuerpo
+        return chain.filter(exchange);
     }
 }
 

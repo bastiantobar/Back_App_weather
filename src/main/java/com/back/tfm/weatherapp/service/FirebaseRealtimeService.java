@@ -24,13 +24,11 @@ public class FirebaseRealtimeService {
         this.databaseReference = databaseReference;
     }
 
-    // Persistir clima instantáneo
     public void saveInstantWeather(InstantWeather weather) {
         String key = databaseReference.child("InstantWeather").push().getKey();
         databaseReference.child("InstantWeather").child(key).setValueAsync(weather);
     }
 
-    // Persistir pronósticos horarios
     public void saveHourlyForecasts(List<HourlyForecast> forecasts) {
         DatabaseReference ref = databaseReference.child("HourlyForecasts");
         for (HourlyForecast forecast : forecasts) {
@@ -39,23 +37,19 @@ public class FirebaseRealtimeService {
         }
     }
 
-    // Persistir mapas de viento
     public void saveWindMap(WindMap windMap) {
         String key = databaseReference.child("WindMaps").push().getKey();
         databaseReference.child("WindMaps").child(key).setValueAsync(windMap);
     }
 
-    // Leer datos de clima instantáneo persistidos
     public Mono<List<InstantWeather>> getAllInstantWeather() {
         return fetchFromFirebase("InstantWeather", InstantWeather.class);
     }
 
-    // Leer pronósticos horarios persistidos
     public Mono<List<HourlyForecast>> getAllHourlyForecasts() {
         return fetchFromFirebase("HourlyForecasts", HourlyForecast.class);
     }
 
-    // Leer mapas de viento persistidos
     public Mono<List<WindMap>> getAllWindMaps() {
         return fetchFromFirebase("WindMaps", WindMap.class);
     }
