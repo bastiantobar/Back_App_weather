@@ -1,11 +1,11 @@
 package com.back.tfm.weatherapp.controller;
 
 import com.back.tfm.weatherapp.dto.LoginRequestDto;
+import com.back.tfm.weatherapp.dto.UserDto;
 import com.back.tfm.weatherapp.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,8 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -32,7 +30,7 @@ public class AuthController {
     @Operation(
             summary = "Register a new user",
             description = "Registers a new user in Firebase using an email and password",
-            requestBody = @RequestBody(
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "JSON object containing the email and password of the user to be registered",
                     required = true,
                     content = @Content(
@@ -44,16 +42,17 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "User registered successfully", content = @Content),
             @ApiResponse(responseCode = "400", description = "Invalid input or registration error", content = @Content)
     })
-    public ResponseEntity<String> registerUser(@RequestBody Map<String, String> user) {
+    public ResponseEntity<String> registerUser(@RequestBody UserDto userDto) {
         try {
-            String email = user.get("email");
-            String password = user.get("password");
+            logger.warn("Datos recibidos: email={}, password={}", userDto.getEmail(), userDto.getPassword());
 
-            if (email == null || password == null) {
+            if (userDto.getEmail() == null || userDto.getPassword() == null) {
+                logger.warn("Email o contraseña no proporcionados");
                 return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
             }
 
-            String userId = authService.registerUser(email, password);
+            // Llamada al servicio de autenticación para registrar al usuario
+            String userId = authService.registerUser(userDto.getEmail(), userDto.getPassword());
             return ResponseEntity.ok("Usuario registrado con UID: " + userId);
         } catch (Exception e) {
             logger.error("Error al registrar usuario: {}", e.getMessage());
@@ -65,7 +64,7 @@ public class AuthController {
     @Operation(
             summary = "Authenticate user",
             description = "Authenticates a user in Firebase using email and password, and returns a JWT token",
-            requestBody = @RequestBody(
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "JSON object containing the email and password of the user to be authenticated",
                     required = true,
                     content = @Content(
@@ -79,11 +78,14 @@ public class AuthController {
     })
     public ResponseEntity<String> loginUser(@RequestBody LoginRequestDto loginRequest) {
         try {
-           /* if (loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
-                return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
-            }*/
+            logger.warn("Intentando autenticar usuario con email={}", loginRequest.getEmail());
 
-            String token = authService.authenticateUser("bastiantobar.94@gmail.com", "password");
+            if (loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
+                return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
+            }
+
+            // Llamada al servicio de autenticación para validar al usuario
+            String token = authService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
             return ResponseEntity.ok("Bearer " + token);
         } catch (Exception e) {
             logger.error("Error al autenticar usuario: {}", e.getMessage());
