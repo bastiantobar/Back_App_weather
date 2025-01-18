@@ -14,6 +14,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Endpoints for user authentication and registration")
@@ -76,20 +79,26 @@ public class AuthController {
             @ApiResponse(responseCode = "200", description = "User authenticated successfully", content = @Content),
             @ApiResponse(responseCode = "400", description = "Invalid credentials or authentication error", content = @Content)
     })
-    public ResponseEntity<String> loginUser(@RequestBody LoginRequestDto loginRequest) {
+    public ResponseEntity<Map<String, String>> loginUser(@RequestBody LoginRequestDto loginRequest) {
         try {
             logger.warn("Intentando autenticar usuario con email={}", loginRequest.getEmail());
 
             if (loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
-                return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
+                return ResponseEntity.badRequest().body(Map.of("error", "Email y contraseña son obligatorios"));
             }
 
             // Llamada al servicio de autenticación para validar al usuario
             String token = authService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
-            return ResponseEntity.ok("Bearer " + token);
+
+            // Construir la respuesta como JSON
+            Map<String, String> response = new HashMap<>();
+            response.put("token", "Bearer " + token);
+
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error al autenticar usuario: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("Error al autenticar usuario: " + e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "Error al autenticar usuario: " + e.getMessage()));
         }
     }
+
 }
