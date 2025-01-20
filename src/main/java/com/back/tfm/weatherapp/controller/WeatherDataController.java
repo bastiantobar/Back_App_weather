@@ -110,6 +110,28 @@ public class WeatherDataController {
                         .build()));
     }
 
+    @Operation(
+            summary = "Obtener el último punto del mapa de viento",
+            description = "Devuelve solo el registro más reciente del mapa de viento almacenado en Firebase."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Registro más reciente obtenido exitosamente",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = WindMap.class))),
+            @ApiResponse(responseCode = "204", description = "No hay registros disponibles"),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(mediaType = "application/json"))
+    })
+    @GetMapping("/wind-map/last")
+    public Mono<ResponseEntity<?>> getLastWindMap() {
+        return firebaseRealtimeService.getLastWindMap()
+                .map(windMap -> {
+                    if (windMap == null || windMap.getFeatures() == null || windMap.getFeatures().isEmpty()) {
+                        return ResponseEntity.noContent().build(); // Devuelve 204 si no hay datos
+                    }
+                    return ResponseEntity.ok(windMap); // Devuelve el registro más reciente
+                })
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<WindMap>build())); // Especificación explícita del tipo
+    }
     @Operation(summary = "Obtener el gráfico meteorológico (meteograma)",
             description = "Devuelve un gráfico meteorológico en formato SVG para Madrid.")
     @ApiResponses(value = {

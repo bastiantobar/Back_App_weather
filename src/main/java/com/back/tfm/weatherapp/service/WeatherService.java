@@ -1,9 +1,6 @@
 package com.back.tfm.weatherapp.service;
 
-import com.back.tfm.weatherapp.model.HourlyForecast;
-import com.back.tfm.weatherapp.model.InstantWeather;
-import com.back.tfm.weatherapp.model.WindMap;
-import com.back.tfm.weatherapp.model.WindMapPoint;
+import com.back.tfm.weatherapp.model.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -94,30 +91,44 @@ public class WeatherService {
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .map(jsonNode -> {
+                    // Extraer las series temporales de datos
                     JsonNode timeseriesNode = jsonNode.at("/properties/timeseries");
-                    JsonNode coordinatesNode = jsonNode.at("/geometry/coordinates");
-                    List<Double> coordinates = new ArrayList<>();
-                    if (coordinatesNode.isArray()) {
-                        for (JsonNode coord : coordinatesNode) {
-                            coordinates.add(coord.asDouble());
-                        }
-                    }
 
-                    List<WindMapPoint> points = new ArrayList<>();
+                    // Coordenadas del punto
+                    List<Double> coordinates = List.of(-3.7038, 40.4168);
+
+                    // Crear la lista de puntos (features)
+                    List<WindMapPoint> features = new ArrayList<>();
                     if (timeseriesNode.isArray()) {
                         for (JsonNode entry : timeseriesNode) {
+                            // Crear las propiedades de cada punto
+                            Properties properties = new Properties();
+                            properties.setWindSpeed(entry.at("/data/instant/details/wind_speed").asDouble());
+                            properties.setWindDirection(entry.at("/data/instant/details/wind_from_direction").asDouble());
+                            properties.setTime(entry.at("/time").asText());
+
+                            // Crear la geometría de cada punto
+                            Geometry geometry = new Geometry();
+                            geometry.setCoordinates(coordinates);
+
+                            // Crear el punto completo
                             WindMapPoint point = new WindMapPoint();
-                            point.setCoordinates(coordinates);
-                            point.setWindSpeed(entry.at("/data/instant/details/wind_speed").asDouble());
-                            points.add(point);
+                            point.setType("Feature");
+                            point.setGeometry(geometry);
+                            point.setProperties(properties);
+                            features.add(point);
                         }
                     }
 
-                    WindMap map = new WindMap();
-                    map.setFeatures(points);
-                    return map;
+                    // Crear el objeto WindMap
+                    WindMap windMap = new WindMap();
+                    windMap.setType("FeatureCollection");
+                    windMap.setFeatures(features);
+                    return windMap;
                 });
     }
+
+
 
     public Mono<InstantWeather> getAndPersistInstantWeather() {
         return getInstantWeather()

@@ -3,6 +3,7 @@ package com.back.tfm.weatherapp.service;
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.model.WindMap;
+import com.back.tfm.weatherapp.model.WindMapPoint;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -58,6 +60,46 @@ public class FirebaseRealtimeService {
                     return Mono.just(list.get(list.size() - 1)); // Obtener el último registro
                 });
     }
+
+    public Mono<WindMap> getLastWindMap() {
+        CompletableFuture<WindMap> future = new CompletableFuture<>();
+        databaseReference.child("WindMaps")
+                .orderByKey()
+                .limitToLast(1)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot snapshot) {
+                        for (DataSnapshot childSnapshot : snapshot.getChildren()) {
+                            WindMap fullMap = childSnapshot.getValue(WindMap.class);
+                            if (fullMap != null && fullMap.getFeatures() != null) {
+                                List<WindMapPoint> features = fullMap.getFeatures();
+                                WindMapPoint latestFeature = features.stream()
+                                        .max(Comparator.comparing(f -> f.getProperties().getTime()))
+                                        .orElse(null);
+
+                                if (latestFeature != null) {
+                                    WindMap result = new WindMap();
+                                    result.setType("FeatureCollection");
+                                    result.setFeatures(List.of(latestFeature));
+                                    future.complete(result);
+                                    return;
+                                }
+                            }
+                        }
+                        future.complete(null); // Si no hay datos, completar con null
+                    }
+
+                    @Override
+                    public void onCancelled(DatabaseError error) {
+                        future.completeExceptionally(new RuntimeException("Error al leer WindMap: " + error.getMessage()));
+                    }
+                });
+        return Mono.fromFuture(future);
+    }
+
+
+
+
 
 
     public Mono<List<WindMap>> getAllWindMaps() {
