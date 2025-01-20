@@ -49,6 +49,16 @@ public class FirebaseRealtimeService {
     public Mono<List<HourlyForecast>> getAllHourlyForecasts() {
         return fetchFromFirebase("HourlyForecasts", HourlyForecast.class);
     }
+    public Mono<InstantWeather> getLastInstantWeather() {
+        return fetchFromFirebase("HourlyForecasts", InstantWeather.class)
+                .flatMap(list -> {
+                    if (list.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    return Mono.just(list.get(list.size() - 1)); // Obtener el último registro
+                });
+    }
+
 
     public Mono<List<WindMap>> getAllWindMaps() {
         return fetchFromFirebase("WindMaps", WindMap.class);

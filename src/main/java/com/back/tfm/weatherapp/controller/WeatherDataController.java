@@ -52,6 +52,25 @@ public class WeatherDataController {
                         .status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .build()));
     }
+    @Operation(
+            summary = "Obtener el último dato de clima instantáneo",
+            description = "Devuelve el último registro de clima instantáneo almacenado en Firebase."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Dato obtenido exitosamente",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InstantWeather.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(mediaType = "application/json"))
+    })
+    @GetMapping("/instant/last")
+    public Mono<ResponseEntity<InstantWeather>> getLastInstantWeather() {
+        return firebaseRealtimeService.getLastInstantWeather()
+                .map(ResponseEntity::ok)
+                .onErrorResume(e -> Mono.just(ResponseEntity
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .build()));
+    }
+
 
     @Operation(
             summary = "Obtener pronósticos por hora",
