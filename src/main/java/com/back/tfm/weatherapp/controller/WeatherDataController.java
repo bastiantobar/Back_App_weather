@@ -72,9 +72,10 @@ public class WeatherDataController {
     }
 
 
+    @GetMapping("/hourly")
     @Operation(
-            summary = "Obtener pronósticos por hora",
-            description = "Devuelve todos los registros de pronósticos horarios almacenados en Firebase."
+            summary = "Obtener pronósticos por hora (últimas 48 horas)",
+            description = "Devuelve los registros de pronósticos horarios almacenados en Firebase dentro de las últimas 48 horas."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Datos obtenidos exitosamente",
@@ -82,14 +83,14 @@ public class WeatherDataController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json"))
     })
-    @GetMapping("/hourly")
-    public Mono<ResponseEntity<List<HourlyForecast>>> getAllHourlyForecasts() {
-        return firebaseRealtimeService.getAllHourlyForecasts()
+    public Mono<ResponseEntity<List<HourlyForecast>>> getHourlyForecastsLast48Hours() {
+        return firebaseRealtimeService.getHourlyForecastsLast48Hours()
                 .map(ResponseEntity::ok)
                 .onErrorResume(e -> Mono.just(ResponseEntity
                         .status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .build()));
     }
+
 
     @Operation(
             summary = "Obtener mapas de viento",

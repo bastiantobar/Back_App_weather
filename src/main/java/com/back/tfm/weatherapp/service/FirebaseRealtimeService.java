@@ -12,10 +12,12 @@ import com.google.firebase.database.DatabaseError;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 public class FirebaseRealtimeService {
@@ -50,6 +52,20 @@ public class FirebaseRealtimeService {
 
     public Mono<List<HourlyForecast>> getAllHourlyForecasts() {
         return fetchFromFirebase("HourlyForecasts", HourlyForecast.class);
+    }
+    public Mono<List<HourlyForecast>> getHourlyForecastsLast48Hours() {
+        return getAllHourlyForecasts() // Obtener todos los pronósticos
+                .map(hourlyForecasts -> {
+                    Instant now = Instant.now();
+                    Instant last48Hours = now.minusSeconds(48 * 60 * 60); // Restar 48 horas
+
+                    return hourlyForecasts.stream()
+                            .filter(forecast -> {
+                                Instant forecastTime = Instant.parse(forecast.getTime()); // Asegúrate de que `getTime` sea un formato ISO-8601
+                                return forecastTime.isAfter(last48Hours);
+                            })
+                            .collect(Collectors.toList());
+                });
     }
     public Mono<InstantWeather> getLastInstantWeather() {
         return fetchFromFirebase("HourlyForecasts", InstantWeather.class)
