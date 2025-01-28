@@ -2,7 +2,10 @@ package com.back.tfm.weatherapp.service;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.FirebaseToken;
 import com.google.firebase.auth.UserRecord;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,4 +49,24 @@ public class AuthService {
             throw new Exception("Firebase authentication failed: " + e.getMessage());
         }
     }
+    public void updateFcmTokenInDatabase(String userId, String fcmToken) {
+        DatabaseReference userRef = FirebaseDatabase.getInstance()
+                .getReference("users")
+                .child(userId);
+
+        try {
+            userRef.child("fcmToken").setValueAsync(fcmToken).get(); // Bloquea hasta que se complete
+            logger.info("Token de FCM actualizado para el usuario: {}", userId);
+        } catch (Exception e) {
+            logger.error("Error al actualizar token de FCM para el usuario: {}", e.getMessage());
+        }
+    }
+
+    public String getUserIdFromToken(String authToken) throws Exception {
+        String token = authToken.startsWith("Bearer ") ? authToken.substring(7) : authToken;
+        logger.info("Token", token);// Eliminar "Bearer " del token
+        FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token); // Verificar el token
+        return decodedToken.getUid(); // Devolver el UID
+    }
+
 }

@@ -5,6 +5,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.messaging.FirebaseMessaging;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -27,5 +28,19 @@ public class FirebaseConfig {
             FirebaseApp.initializeApp(options);
         }
         return FirebaseDatabase.getInstance().getReference();
+    }
+    @Bean
+    public FirebaseMessaging firebaseMessaging() throws IOException {
+        if (FirebaseApp.getApps().isEmpty()) {
+            FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase-service-account.json");
+
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setDatabaseUrl("https://base-app-weather-default-rtdb.firebaseio.com/")
+                    .build();
+
+            FirebaseApp.initializeApp(options);
+        }
+        return FirebaseMessaging.getInstance();
     }
 }

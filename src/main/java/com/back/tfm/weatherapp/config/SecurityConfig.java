@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/register", "/auth/login").permitAll() // Endpoints públicos
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll() // Swagger público
-                        .pathMatchers("/weather/**").authenticated() // Endpoints protegidos
+                        .pathMatchers("/weather/**","/api/**","/auth/update-fcm-token").authenticated() // Endpoints protegidos
                         .anyExchange().denyAll() // Bloquear cualquier otro endpoint no especificado
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt()) // Habilitar validación JWT

@@ -100,5 +100,39 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Error al autenticar usuario: " + e.getMessage()));
         }
     }
+    @PostMapping("/update-fcm-token")
+    @Operation(
+            summary = "Actualizar el token de FCM del usuario",
+            description = "Actualiza el token de FCM asociado al UID del usuario autenticado"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token de FCM actualizado con éxito", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Error al actualizar el token de FCM", content = @Content)
+    })
+    public ResponseEntity<String> updateFcmToken(
+            @RequestHeader("Authorization") String authToken,
+            @RequestBody Map<String, String> request
+    ) {
+        try {
+            String fcmToken = request.get("fcmToken");
+            logger.warn("Intentando autenticar usuario con fcmToken={}", fcmToken);
+            if (fcmToken == null || fcmToken.isEmpty()) {
+                return ResponseEntity.badRequest().body("Token de FCM es requerido");
+            }
+
+            // Obtener el UID del usuario autenticado desde el token de Firebase
+            String userId = authService.getUserIdFromToken(authToken);
+            logger.warn("Intentando autenticar usuario con userId={}", userId);
+
+            // Guardar el FCM Token en Firebase Realtime Database o Firestore
+            authService.updateFcmTokenInDatabase(userId, fcmToken);
+
+            return ResponseEntity.ok("Token de FCM actualizado con éxito");
+        } catch (Exception e) {
+            logger.error("Error al actualizar token de FCM: {}", e.getMessage());
+            return ResponseEntity.badRequest().body("Error al actualizar token de FCM: " + e.getMessage());
+        }
+    }
+
 
 }
