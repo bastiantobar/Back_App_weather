@@ -63,10 +63,10 @@ public class AuthService {
     }
 
     public String getUserIdFromToken(String authToken) throws Exception {
-        String token = authToken.startsWith("Bearer ") ? authToken.substring(7) : authToken;
-        logger.info("Token", token);// Eliminar "Bearer " del token
-        FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token); // Verificar el token
-        return decodedToken.getUid(); // Devolver el UID
+        String token = authToken.startsWith("Bearer ") ? authToken.substring(7) : authToken;  // Eliminar "Bearer " si está presente
+        FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
+        return decodedToken.getUid();  // Devuelve el userId asociado al token
     }
+
 
 }

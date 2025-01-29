@@ -13,7 +13,7 @@ public class WeatherScheduler {
     }
 
     // Ejecutar cada 10 minutos para InstantWeather
-    @Scheduled(cron = "0 */10 * * * *") // Cada 10 minutos
+    @Scheduled(cron = "0 0 0 * * *") // Cada 10 minutos
     public void fetchAndPersistInstantWeather() {
         weatherService.getAndPersistInstantWeather()
                 .doOnError(error -> System.err.println("Error al persistir InstantWeather: " + error.getMessage()))

@@ -2,7 +2,9 @@ package com.back.tfm.weatherapp.controller;
 
 import com.back.tfm.weatherapp.dto.LoginRequestDto;
 import com.back.tfm.weatherapp.dto.UserDto;
+import com.back.tfm.weatherapp.model.UserPreferences;
 import com.back.tfm.weatherapp.service.AuthService;
+import com.back.tfm.weatherapp.service.FirebaseRealtimeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,9 +26,11 @@ public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private final AuthService authService;
+    private final FirebaseRealtimeService firebaseRealtimeService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, FirebaseRealtimeService firebaseRealtimeService) {
         this.authService = authService;
+        this.firebaseRealtimeService = firebaseRealtimeService;
     }
 
     @PostMapping("/register")
@@ -133,6 +137,44 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Error al actualizar token de FCM: " + e.getMessage());
         }
     }
+
+    @PostMapping("/create-preferences")
+    @Operation(
+            summary = "Actualizar preferencias del usuario",
+            description = "Este endpoint permite actualizar las preferencias del usuario (temperatura, viento, humedad).",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Objeto con las preferencias del usuario.",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = UserPreferences.class)
+                    )
+            )
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Preferencias guardadas exitosamente"),
+            @ApiResponse(responseCode = "400", description = "Error al guardar las preferencias, faltan datos requeridos o error en la base de datos")
+    })
+    public ResponseEntity<String> createPreferences(
+            @RequestHeader("Authorization") String authToken,
+            @RequestBody UserPreferences preferences) {
+
+        try {
+            // El token sigue siendo necesario para la autenticación, pero lo que necesitamos es el userId
+            String userId = preferences.getUserId(); // Obtenemos el userId de las preferencias
+
+            if (userId == null) {
+                throw new RuntimeException("No userId provided in request");
+            }
+
+            // Ahora buscamos las preferencias usando el userId
+            firebaseRealtimeService.saveUserPreferences(userId, preferences.getEmail(), preferences);
+
+            return ResponseEntity.ok("Preferencias guardadas exitosamente");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error al guardar preferencias: " + e.getMessage());
+        }
+    }
+
 
 
 }
