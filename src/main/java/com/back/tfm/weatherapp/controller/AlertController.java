@@ -1,6 +1,6 @@
+
 package com.back.tfm.weatherapp.controller;
 
-import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.service.FirebaseRealtimeService;
 import com.back.tfm.weatherapp.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,9 +11,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -33,28 +32,40 @@ public class AlertController {
 
     @Operation(
             summary = "Generar alertas meteorológicas basadas en el último dato de clima",
-            description = "Devuelve una lista de alertas meteorológicas según los datos del clima obtenidos."
+            description = "Verifica si el usuario tiene activadas las notificaciones antes de enviar alertas."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Alertas generadas exitosamente",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class))),
+            @ApiResponse(responseCode = "403", description = "Notificaciones desactivadas para el usuario",
+                    content = @Content(mediaType = "application/json")),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json"))
     })
-    @GetMapping("/alerts")
-    public Mono<ResponseEntity<List<String>>> getWeatherAlerts() {
-        return firebaseRealtimeService.getLastInstantWeather()
-                .map(weather -> {
-                    List<String> alerts = notificationService.generateAlerts(weather);
-
-                    if (!alerts.isEmpty()) {
-                        String title = "Alerta Meteorológica";
-                        String body = String.join(", ", alerts);
-                        notificationService.sendNotification(title, body, "weather_alerts");
+    @GetMapping("/alerts/{userId}")
+    public Mono<ResponseEntity<List<String>>> getWeatherAlerts(@PathVariable String userId) {
+        return firebaseRealtimeService.getUserNotificationPreference(userId) // ✅ Consultamos si el usuario tiene activadas las notificaciones
+                .flatMap(notificationsEnabled -> {
+                    if (!notificationsEnabled) {
+                        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(List.of("Notificaciones desactivadas")));
                     }
 
-                    return ResponseEntity.ok(alerts);
+                    return firebaseRealtimeService.getLastInstantWeather()
+                            .map(weather -> {
+                                List<String> alerts = notificationService.generateAlerts(weather);
+
+                                if (!alerts.isEmpty()) {
+                                    String title = "⚠️ Alerta Meteorológica";
+                                    String body = String.join(", ", alerts);
+                                    notificationService.sendNotification(title, body, "weather_alerts");
+                                }
+
+                                return ResponseEntity.ok(alerts);
+                            });
                 })
-                .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()));
+                .onErrorResume(e -> {
+                    e.printStackTrace();
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                });
     }
 }

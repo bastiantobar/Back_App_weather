@@ -16,7 +16,7 @@ import java.io.IOException;
 public class FirebaseConfig {
 
     @Bean
-    public DatabaseReference firebaseDatabase() throws IOException {
+    public FirebaseApp firebaseApp() throws IOException {
         if (FirebaseApp.getApps().isEmpty()) {
             FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase-service-account.json");
 
@@ -25,22 +25,18 @@ public class FirebaseConfig {
                     .setDatabaseUrl("https://base-app-weather-default-rtdb.firebaseio.com/")
                     .build();
 
-            FirebaseApp.initializeApp(options);
+            return FirebaseApp.initializeApp(options);
         }
-        return FirebaseDatabase.getInstance().getReference();
+        return FirebaseApp.getInstance();
     }
+
     @Bean
-    public FirebaseMessaging firebaseMessaging() throws IOException {
-        if (FirebaseApp.getApps().isEmpty()) {
-            FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase-service-account.json");
+    public DatabaseReference firebaseDatabase(FirebaseApp firebaseApp) {
+        return FirebaseDatabase.getInstance(firebaseApp).getReference();  // 📌 Retorna la referencia raíz
+    }
 
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    .setDatabaseUrl("https://base-app-weather-default-rtdb.firebaseio.com/")
-                    .build();
-
-            FirebaseApp.initializeApp(options);
-        }
-        return FirebaseMessaging.getInstance();
+    @Bean
+    public FirebaseMessaging firebaseMessaging(FirebaseApp firebaseApp) {
+        return FirebaseMessaging.getInstance(firebaseApp);
     }
 }

@@ -143,4 +143,22 @@ public class FirebaseRealtimeService {
         });
         return Mono.fromFuture(future);
     }
+    public Mono<Boolean> getUserNotificationPreference(String userId) {
+        return Mono.create(sink -> {
+            databaseReference.child("users").child(userId).child("notifications_enabled")
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(DataSnapshot dataSnapshot) {
+                            Boolean notificationsEnabled = dataSnapshot.getValue(Boolean.class);
+                            sink.success(notificationsEnabled != null ? notificationsEnabled : false);
+                        }
+
+                        @Override
+                        public void onCancelled(DatabaseError databaseError) {
+                            sink.error(new Exception("Error al obtener la preferencia de notificaciones: " + databaseError.getMessage()));
+                        }
+                    });
+        });
+    }
+
 }
