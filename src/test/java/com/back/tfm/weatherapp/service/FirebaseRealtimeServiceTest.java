@@ -12,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -130,4 +131,42 @@ class FirebaseRealtimeServiceTest {
 
         verify(childReferenceMock).addListenerForSingleValueEvent(any(ValueEventListener.class));
     }
+    @Test
+    void testGetHourlyForecastsLast48Hours() {
+        List<HourlyForecast> mockForecasts = new ArrayList<>();
+
+        Instant now = Instant.now();
+        Instant within48Hours = now.minusSeconds(24 * 60 * 60);
+        Instant outside48Hours = now.minusSeconds(50 * 60 * 60); 
+
+        HourlyForecast forecast1 = new HourlyForecast();
+        forecast1.setTime(within48Hours.toString());
+        forecast1.setAirTemperature(15.5);
+        forecast1.setWindSpeed(10.0);
+        forecast1.setPrecipitationAmount(0.2);
+
+        HourlyForecast forecast2 = new HourlyForecast();
+        forecast2.setTime(outside48Hours.toString());
+        forecast2.setAirTemperature(14.0);
+        forecast2.setWindSpeed(8.0);
+        forecast2.setPrecipitationAmount(0.1);
+
+        mockForecasts.add(forecast1);
+        mockForecasts.add(forecast2);
+
+        // Crear un spy para stubear solo getAllHourlyForecasts()
+        FirebaseRealtimeService spyService = spy(firebaseRealtimeService);
+        doReturn(Mono.just(mockForecasts)).when(spyService).getAllHourlyForecasts();
+
+        // Ejecutar el método
+        Mono<List<HourlyForecast>> result = spyService.getHourlyForecastsLast48Hours();
+
+        // Verificar que solo se retorne forecast1 (dentro de las últimas 48 horas)
+        StepVerifier.create(result)
+                .expectNextMatches(forecasts -> forecasts.size() == 1 && forecasts.get(0).getAirTemperature() == 15.5)
+                .verifyComplete();
+    }
+
+
+
 }
