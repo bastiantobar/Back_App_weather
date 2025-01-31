@@ -105,7 +105,7 @@ public class FirebaseRealtimeService {
         return Mono.fromFuture(future);
     }
     // Método genérico para leer datos desde Firebase
-    private <T> Mono<List<T>> fetchFromFirebase(String node, Class<T> clazz) {
+    protected  <T> Mono<List<T>> fetchFromFirebase(String node, Class<T> clazz) {
         CompletableFuture<List<T>> future = new CompletableFuture<>();
         databaseReference.child(node).addListenerForSingleValueEvent(new ValueEventListener() {
             @Override

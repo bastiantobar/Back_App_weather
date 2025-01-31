@@ -137,7 +137,7 @@ class FirebaseRealtimeServiceTest {
 
         Instant now = Instant.now();
         Instant within48Hours = now.minusSeconds(24 * 60 * 60);
-        Instant outside48Hours = now.minusSeconds(50 * 60 * 60); 
+        Instant outside48Hours = now.minusSeconds(50 * 60 * 60);
 
         HourlyForecast forecast1 = new HourlyForecast();
         forecast1.setTime(within48Hours.toString());
@@ -164,6 +164,36 @@ class FirebaseRealtimeServiceTest {
         // Verificar que solo se retorne forecast1 (dentro de las últimas 48 horas)
         StepVerifier.create(result)
                 .expectNextMatches(forecasts -> forecasts.size() == 1 && forecasts.get(0).getAirTemperature() == 15.5)
+                .verifyComplete();
+    }
+    @Test
+    void testGetLastInstantWeather() {
+        List<InstantWeather> mockWeatherList = new ArrayList<>();
+
+        InstantWeather weather1 = new InstantWeather();
+        weather1.setAirTemperature(20.0);
+        weather1.setRelativeHumidity(60.0);
+        weather1.setAirPressureAtSeaLevel(1010.0);
+        weather1.setWindSpeed(5.0);
+        weather1.setCloudAreaFraction(40.0);
+
+        InstantWeather weather2 = new InstantWeather();
+        weather2.setAirTemperature(22.5);
+        weather2.setRelativeHumidity(55.0);
+        weather2.setAirPressureAtSeaLevel(1012.0);
+        weather2.setWindSpeed(7.0);
+        weather2.setCloudAreaFraction(30.0);
+
+        mockWeatherList.add(weather1);
+        mockWeatherList.add(weather2); // El último registro es el que debe retornar
+
+        FirebaseRealtimeService spyService = spy(firebaseRealtimeService);
+        doReturn(Mono.just(mockWeatherList)).when(spyService).fetchFromFirebase("HourlyForecasts", InstantWeather.class);
+
+        Mono<InstantWeather> result = spyService.getLastInstantWeather();
+
+        StepVerifier.create(result)
+                .expectNextMatches(weather -> weather.getAirTemperature() == 22.5) // Último registro esperado
                 .verifyComplete();
     }
 
