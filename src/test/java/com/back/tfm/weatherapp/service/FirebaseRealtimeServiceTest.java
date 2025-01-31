@@ -247,6 +247,85 @@ class FirebaseRealtimeServiceTest {
                         windMap.getFeatures().get(0).getProperties().getTime().equals("2025-02-01T14:00:00Z"))
                 .verifyComplete();
     }
+    @Test
+    void testGetUserNotificationPreference_Enabled() {
+        String userId = "testUser";
 
+        DatabaseReference userRef = mock(DatabaseReference.class);
+        DatabaseReference notificationsRef = mock(DatabaseReference.class);
+        DataSnapshot mockSnapshot = mock(DataSnapshot.class);
 
+        when(databaseReferenceMock.child("users")).thenReturn(userRef);
+        when(userRef.child(userId)).thenReturn(userRef);
+        when(userRef.child("notifications_enabled")).thenReturn(notificationsRef);
+
+        // Simula que el nodo "notifications_enabled" tiene el valor `true`
+        doAnswer(invocation -> {
+            ValueEventListener listener = invocation.getArgument(0);
+            listener.onDataChange(mockSnapshot);
+            return null;
+        }).when(notificationsRef).addListenerForSingleValueEvent(any());
+
+        when(mockSnapshot.getValue(Boolean.class)).thenReturn(true);
+
+        Mono<Boolean> result = firebaseRealtimeService.getUserNotificationPreference(userId);
+
+        StepVerifier.create(result)
+                .expectNext(true)
+                .verifyComplete();
+    }
+    @Test
+    void testGetUserNotificationPreference_Disabled() {
+        String userId = "testUser";
+
+        DatabaseReference userRef = mock(DatabaseReference.class);
+        DatabaseReference notificationsRef = mock(DatabaseReference.class);
+        DataSnapshot mockSnapshot = mock(DataSnapshot.class);
+
+        when(databaseReferenceMock.child("users")).thenReturn(userRef);
+        when(userRef.child(userId)).thenReturn(userRef);
+        when(userRef.child("notifications_enabled")).thenReturn(notificationsRef);
+
+        // Simula que el nodo "notifications_enabled" tiene el valor `false`
+        doAnswer(invocation -> {
+            ValueEventListener listener = invocation.getArgument(0);
+            listener.onDataChange(mockSnapshot);
+            return null;
+        }).when(notificationsRef).addListenerForSingleValueEvent(any());
+
+        when(mockSnapshot.getValue(Boolean.class)).thenReturn(false);
+
+        Mono<Boolean> result = firebaseRealtimeService.getUserNotificationPreference(userId);
+
+        StepVerifier.create(result)
+                .expectNext(false)
+                .verifyComplete();
+    }
+    @Test
+    void testGetUserNotificationPreference_Error() {
+        String userId = "testUser";
+
+        DatabaseReference userRef = mock(DatabaseReference.class);
+        DatabaseReference notificationsRef = mock(DatabaseReference.class);
+        DatabaseError databaseError = mock(DatabaseError.class);
+
+        when(databaseReferenceMock.child("users")).thenReturn(userRef);
+        when(userRef.child(userId)).thenReturn(userRef);
+        when(userRef.child("notifications_enabled")).thenReturn(notificationsRef);
+
+        // Simula que Firebase devuelve un error
+        doAnswer(invocation -> {
+            ValueEventListener listener = invocation.getArgument(0);
+            listener.onCancelled(databaseError);
+            return null;
+        }).when(notificationsRef).addListenerForSingleValueEvent(any());
+
+        when(databaseError.getMessage()).thenReturn("Simulated Firebase error");
+
+        Mono<Boolean> result = firebaseRealtimeService.getUserNotificationPreference(userId);
+
+        StepVerifier.create(result)
+                .expectErrorMatches(error -> error.getMessage().contains("Simulated Firebase error"))
+                .verify();
+    }
 }
