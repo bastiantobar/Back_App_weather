@@ -2,9 +2,7 @@ package com.back.tfm.weatherapp.service;
 
 import static org.mockito.Mockito.*;
 
-import com.back.tfm.weatherapp.model.HourlyForecast;
-import com.back.tfm.weatherapp.model.InstantWeather;
-import com.back.tfm.weatherapp.model.WindMap;
+import com.back.tfm.weatherapp.model.*;
 import com.google.firebase.database.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -197,6 +195,58 @@ class FirebaseRealtimeServiceTest {
                 .verifyComplete();
     }
 
+    @Test
+    void testGetLastWindMap() {
+        WindMapPoint point1 = new WindMapPoint();
+        Properties properties1 = new Properties();
+        properties1.setTime("2025-02-01T12:00:00Z");
+        properties1.setWindSpeed(10.5);
+        properties1.setWindDirection(180.0);
+        point1.setProperties(properties1);
+
+        WindMapPoint point2 = new WindMapPoint();
+        Properties properties2 = new Properties();
+        properties2.setTime("2025-02-01T14:00:00Z"); // Más reciente
+        properties2.setWindSpeed(12.0);
+        properties2.setWindDirection(190.0);
+        point2.setProperties(properties2);
+
+        WindMap fullWindMap = new WindMap();
+        fullWindMap.setType("FeatureCollection");
+        fullWindMap.setFeatures(List.of(point1, point2)); // Contiene múltiples puntos
+
+        // 🔥 Mock de Firebase DatabaseReference
+        DatabaseReference windMapsRef = mock(DatabaseReference.class);
+        DatabaseReference orderedRef = mock(DatabaseReference.class);
+        DatabaseReference limitedRef = mock(DatabaseReference.class);
+
+        // 🔥 Mock de DataSnapshot
+        DataSnapshot mockSnapshot = mock(DataSnapshot.class);
+        DataSnapshot childSnapshot = mock(DataSnapshot.class);
+
+        when(databaseReferenceMock.child("WindMaps")).thenReturn(windMapsRef);
+        when(windMapsRef.orderByKey()).thenReturn(orderedRef);
+        when(orderedRef.limitToLast(1)).thenReturn(limitedRef);
+
+        when(mockSnapshot.getChildren()).thenReturn(List.of(childSnapshot));
+        when(childSnapshot.getValue(WindMap.class)).thenReturn(fullWindMap);
+
+        // 🔥 Simular `addListenerForSingleValueEvent`
+        doAnswer(invocation -> {
+            ValueEventListener listener = invocation.getArgument(0);
+            listener.onDataChange(mockSnapshot);
+            return null;
+        }).when(limitedRef).addListenerForSingleValueEvent(any());
+
+        // 🔥 Llamar al método real
+        Mono<WindMap> result = firebaseRealtimeService.getLastWindMap();
+
+        // 🔥 Verificar que se obtiene solo el punto más reciente
+        StepVerifier.create(result)
+                .expectNextMatches(windMap -> windMap.getFeatures().size() == 1 &&
+                        windMap.getFeatures().get(0).getProperties().getTime().equals("2025-02-01T14:00:00Z"))
+                .verifyComplete();
+    }
 
 
 }
