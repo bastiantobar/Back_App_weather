@@ -12,11 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+
 import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-
+import static org.mockito.Mockito.*;
 class WeatherServiceTest {
 
     private MockWebServer mockWebServer;
@@ -238,6 +239,58 @@ class WeatherServiceTest {
 
         // 🔥 Verifica las coordenadas del segundo punto
         assertEquals(expectedCoordinates, secondPoint.getGeometry().getCoordinates());
+    }
+
+
+    @Test
+    void testGetAndPersistInstantWeather_Success() throws Exception {
+        // 🔥 JSON simulado con datos reales de la API
+        String mockResponse = """
+    {
+      "properties": {
+        "timeseries": [{
+          "data": {
+            "instant": {
+              "details": {
+                "air_temperature": 15.5,
+                "relative_humidity": 60.0,
+                "air_pressure_at_sea_level": 1015.0,
+                "wind_speed": 5.0,
+                "cloud_area_fraction": 20.0
+              }
+            }
+          }
+        }]
+      }
+    }
+    """;
+
+        // 🔥 Simula la respuesta del servidor con código 200
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(mockResponse)
+                .setHeader("Content-Type", "application/json")
+                .setResponseCode(200));
+
+        // 🔥 Mockea FirebaseRealtimeService
+        FirebaseRealtimeService firebaseRealtimeServiceMock = mock(FirebaseRealtimeService.class);
+        weatherService = new WeatherService(WebClient.builder()
+                .baseUrl(mockWebServer.url("/").toString())
+                .build(), firebaseRealtimeServiceMock); // Inyectamos el mock
+
+        // 🔥 Llama al método real
+        Mono<InstantWeather> resultMono = weatherService.getAndPersistInstantWeather();
+        InstantWeather result = resultMono.block(); // Bloquea para obtener el resultado
+
+        // 🔥 Verifica que `getInstantWeather()` devolvió el objeto correcto
+        assertNotNull(result);
+        assertEquals(15.5, result.getAirTemperature());
+        assertEquals(60.0, result.getRelativeHumidity());
+        assertEquals(1015.0, result.getAirPressureAtSeaLevel());
+        assertEquals(5.0, result.getWindSpeed());
+        assertEquals(20.0, result.getCloudAreaFraction());
+
+        // 🔥 Verifica que el servicio de Firebase se llamó con el objeto correcto
+        verify(firebaseRealtimeServiceMock, times(1)).saveInstantWeather(result);
     }
 
 
