@@ -1,5 +1,6 @@
 package com.back.tfm.weatherapp.service;
 
+import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -10,6 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -90,4 +92,76 @@ class WeatherServiceTest {
         assertEquals(5.0, result.getWindSpeed());
         assertEquals(20.0, result.getCloudAreaFraction());
     }
+    @Test
+    void testGetHourlyForecast_Success() throws Exception {
+        // 🔥 JSON simulado con múltiples registros horarios
+        String mockResponse = """
+    {
+      "properties": {
+        "timeseries": [
+          {
+            "time": "2025-01-31T12:00:00Z",
+            "data": {
+              "instant": {
+                "details": {
+                  "air_temperature": 10.5,
+                  "wind_speed": 3.2
+                }
+              },
+              "next_1_hours": {
+                "details": {
+                  "precipitation_amount": 0.8
+                }
+              }
+            }
+          },
+          {
+            "time": "2025-01-31T13:00:00Z",
+            "data": {
+              "instant": {
+                "details": {
+                  "air_temperature": 11.0,
+                  "wind_speed": 4.5
+                }
+              },
+              "next_1_hours": {
+                "details": {
+                  "precipitation_amount": 0.0
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+    """;
+
+        // 🔥 Simula la respuesta de la API con el header correcto
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(mockResponse)
+                .setHeader("Content-Type", "application/json")
+                .setResponseCode(200));
+
+        // 🔥 Llama al método real
+        Mono<List<HourlyForecast>> resultMono = weatherService.getHourlyForecast();
+        List<HourlyForecast> result = resultMono.block(); // Bloquea para obtener la lista
+
+        // 🔥 Verifica que la lista no es nula y tiene el tamaño esperado
+        assertNotNull(result);
+        assertEquals(2, result.size()); // 🔥 Se enviaron 2 registros
+
+        // 🔥 Verifica que los valores fueron extraídos correctamente
+        HourlyForecast first = result.get(0);
+        assertEquals("2025-01-31T12:00:00Z", first.getTime());
+        assertEquals(10.5, first.getAirTemperature());
+        assertEquals(3.2, first.getWindSpeed());
+        assertEquals(0.8, first.getPrecipitationAmount());
+
+        HourlyForecast second = result.get(1);
+        assertEquals("2025-01-31T13:00:00Z", second.getTime());
+        assertEquals(11.0, second.getAirTemperature());
+        assertEquals(4.5, second.getWindSpeed());
+        assertEquals(0.0, second.getPrecipitationAmount()); // 🔥 Se asegura que el default (0.0) funcione
+    }
+
 }
