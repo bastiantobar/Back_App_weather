@@ -5,10 +5,14 @@ import static org.mockito.Mockito.*;
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.model.WindMap;
-import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
 class FirebaseRealtimeServiceTest {
@@ -89,5 +93,41 @@ class FirebaseRealtimeServiceTest {
         verify(keyReferenceMock).getKey();
         verify(childReferenceMock).child("mockKey");
         verify(keyReferenceMock).setValueAsync(mockWindMap);
+    }
+
+    @Test
+    void testGetAllHourlyForecasts() {
+        ArgumentCaptor<ValueEventListener> listenerCaptor = ArgumentCaptor.forClass(ValueEventListener.class);
+        doAnswer(invocation -> {
+            ValueEventListener listener = listenerCaptor.getValue();
+
+            DataSnapshot snapshotMock = mock(DataSnapshot.class);
+            List<DataSnapshot> children = new ArrayList<>();
+
+            for (int i = 0; i < 2; i++) {
+                DataSnapshot childMock = mock(DataSnapshot.class);
+                HourlyForecast forecast = new HourlyForecast();
+                forecast.setTime("2025-02-01T12:00:00Z");
+                forecast.setAirTemperature(15.5);
+                forecast.setWindSpeed(10.0);
+                forecast.setPrecipitationAmount(0.2);
+
+                when(childMock.getValue(HourlyForecast.class)).thenReturn(forecast);
+                children.add(childMock);
+            }
+
+            when(snapshotMock.getChildren()).thenReturn(children);
+            listener.onDataChange(snapshotMock);
+
+            return null;
+        }).when(childReferenceMock).addListenerForSingleValueEvent(listenerCaptor.capture());
+
+        Mono<List<HourlyForecast>> result = firebaseRealtimeService.getAllHourlyForecasts();
+
+        StepVerifier.create(result)
+                .expectNextMatches(forecasts -> forecasts.size() == 2 && forecasts.get(0).getAirTemperature() == 15.5)
+                .verifyComplete();
+
+        verify(childReferenceMock).addListenerForSingleValueEvent(any(ValueEventListener.class));
     }
 }
