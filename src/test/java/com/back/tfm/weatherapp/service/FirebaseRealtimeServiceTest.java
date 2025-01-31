@@ -301,6 +301,34 @@ class FirebaseRealtimeServiceTest {
                 .expectNext(false)
                 .verifyComplete();
     }
+
+    @Test
+    void testGetUserNotificationPreference_NotSet() {
+        String userId = "testUser";
+
+        DatabaseReference userRef = mock(DatabaseReference.class);
+        DatabaseReference notificationsRef = mock(DatabaseReference.class);
+        DataSnapshot mockSnapshot = mock(DataSnapshot.class);
+
+        when(databaseReferenceMock.child("users")).thenReturn(userRef);
+        when(userRef.child(userId)).thenReturn(userRef);
+        when(userRef.child("notifications_enabled")).thenReturn(notificationsRef);
+
+        // Simula que el nodo "notifications_enabled" no tiene valor (es `null`)
+        doAnswer(invocation -> {
+            ValueEventListener listener = invocation.getArgument(0);
+            listener.onDataChange(mockSnapshot);
+            return null;
+        }).when(notificationsRef).addListenerForSingleValueEvent(any());
+
+        when(mockSnapshot.getValue(Boolean.class)).thenReturn(null);
+
+        Mono<Boolean> result = firebaseRealtimeService.getUserNotificationPreference(userId);
+
+        StepVerifier.create(result)
+                .expectNext(false) // Debe retornar `false` si no hay valor en Firebase
+                .verifyComplete();
+    }
     @Test
     void testGetUserNotificationPreference_Error() {
         String userId = "testUser";
