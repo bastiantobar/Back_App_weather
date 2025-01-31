@@ -2,6 +2,8 @@ package com.back.tfm.weatherapp.service;
 
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
+import com.back.tfm.weatherapp.model.WindMap;
+import com.back.tfm.weatherapp.model.WindMapPoint;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -163,5 +165,80 @@ class WeatherServiceTest {
         assertEquals(4.5, second.getWindSpeed());
         assertEquals(0.0, second.getPrecipitationAmount()); // 🔥 Se asegura que el default (0.0) funcione
     }
+    @Test
+    void testGetWindSpeedMap_Success() throws Exception {
+        // 🔥 JSON simulado con múltiples registros de viento
+        String mockResponse = """
+    {
+      "properties": {
+        "timeseries": [
+          {
+            "time": "2025-01-31T12:00:00Z",
+            "data": {
+              "instant": {
+                "details": {
+                  "wind_speed": 5.2,
+                  "wind_from_direction": 180.0
+                }
+              }
+            }
+          },
+          {
+            "time": "2025-01-31T13:00:00Z",
+            "data": {
+              "instant": {
+                "details": {
+                  "wind_speed": 6.8,
+                  "wind_from_direction": 200.0
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+    """;
+
+        // 🔥 Simula la respuesta de la API con el header correcto
+        mockWebServer.enqueue(new MockResponse()
+                .setBody(mockResponse)
+                .setHeader("Content-Type", "application/json")
+                .setResponseCode(200));
+
+        // 🔥 Llama al método real
+        Mono<WindMap> resultMono = weatherService.getWindSpeedMap();
+        WindMap result = resultMono.block(); // Bloquea para obtener el resultado
+
+        // 🔥 Verifica que el objeto WindMap no sea nulo y tenga el tipo correcto
+        assertNotNull(result);
+        assertEquals("FeatureCollection", result.getType());
+
+        // 🔥 Verifica que contiene dos puntos de datos
+        List<WindMapPoint> features = result.getFeatures();
+        assertNotNull(features);
+        assertEquals(2, features.size());
+
+        // 🔥 Verifica los datos del primer punto
+        WindMapPoint firstPoint = features.get(0);
+        assertEquals("Feature", firstPoint.getType());
+        assertEquals(5.2, firstPoint.getProperties().getWindSpeed());
+        assertEquals(180.0, firstPoint.getProperties().getWindDirection());
+        assertEquals("2025-01-31T12:00:00Z", firstPoint.getProperties().getTime());
+
+        // 🔥 Verifica las coordenadas del primer punto
+        List<Double> expectedCoordinates = List.of(-3.7038, 40.4168);
+        assertEquals(expectedCoordinates, firstPoint.getGeometry().getCoordinates());
+
+        // 🔥 Verifica los datos del segundo punto
+        WindMapPoint secondPoint = features.get(1);
+        assertEquals("Feature", secondPoint.getType());
+        assertEquals(6.8, secondPoint.getProperties().getWindSpeed());
+        assertEquals(200.0, secondPoint.getProperties().getWindDirection());
+        assertEquals("2025-01-31T13:00:00Z", secondPoint.getProperties().getTime());
+
+        // 🔥 Verifica las coordenadas del segundo punto
+        assertEquals(expectedCoordinates, secondPoint.getGeometry().getCoordinates());
+    }
+
 
 }
