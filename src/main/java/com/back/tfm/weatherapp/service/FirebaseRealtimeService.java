@@ -32,7 +32,6 @@ public class FirebaseRealtimeService {
         String key = databaseReference.child("InstantWeather").push().getKey();
         databaseReference.child("InstantWeather").child(key).setValueAsync(weather);
     }
-
     public void saveHourlyForecasts(List<HourlyForecast> forecasts) {
         DatabaseReference ref = databaseReference.child("HourlyForecasts");
         for (HourlyForecast forecast : forecasts) {
@@ -40,16 +39,10 @@ public class FirebaseRealtimeService {
             ref.child(key).setValueAsync(forecast);
         }
     }
-
     public void saveWindMap(WindMap windMap) {
         String key = databaseReference.child("WindMaps").push().getKey();
         databaseReference.child("WindMaps").child(key).setValueAsync(windMap);
     }
-
-    public Mono<List<InstantWeather>> getAllInstantWeather() {
-        return fetchFromFirebase("InstantWeather", InstantWeather.class);
-    }
-
     public Mono<List<HourlyForecast>> getAllHourlyForecasts() {
         return fetchFromFirebase("HourlyForecasts", HourlyForecast.class);
     }
@@ -76,7 +69,6 @@ public class FirebaseRealtimeService {
                     return Mono.just(list.get(list.size() - 1)); // Obtener el último registro
                 });
     }
-
     public Mono<WindMap> getLastWindMap() {
         CompletableFuture<WindMap> future = new CompletableFuture<>();
         databaseReference.child("WindMaps")
@@ -112,16 +104,6 @@ public class FirebaseRealtimeService {
                 });
         return Mono.fromFuture(future);
     }
-
-
-
-
-
-
-    public Mono<List<WindMap>> getAllWindMaps() {
-        return fetchFromFirebase("WindMaps", WindMap.class);
-    }
-
     // Método genérico para leer datos desde Firebase
     private <T> Mono<List<T>> fetchFromFirebase(String node, Class<T> clazz) {
         CompletableFuture<List<T>> future = new CompletableFuture<>();

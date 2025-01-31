@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,47 +20,30 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/weather")
-public class WeatherDataController {
+public class WeatherController {
 
     private final FirebaseRealtimeService firebaseRealtimeService;
     private final WeatherService weatherService;
 
-    public WeatherDataController(FirebaseRealtimeService firebaseRealtimeService,WeatherService weatherService) {
+    public WeatherController(FirebaseRealtimeService firebaseRealtimeService, WeatherService weatherService) {
         this.firebaseRealtimeService = firebaseRealtimeService;
         this.weatherService = weatherService;
     }
 
-    @Operation(
-            summary = "Obtener datos de clima instantáneo",
-            description = "Devuelve todos los registros de clima instantáneo almacenados en Firebase."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Datos obtenidos exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InstantWeather.class))),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
-                    content = @Content(mediaType = "application/json"))
-    })
-    @GetMapping("/instant")
-    public Mono<ResponseEntity<List<InstantWeather>>> getAllInstantWeather() {
-        return firebaseRealtimeService.getAllInstantWeather()
-                .map(ResponseEntity::ok)
-                .onErrorResume(e -> Mono.just(ResponseEntity
-                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .build()));
-    }
     @Operation(
             summary = "Obtener el último dato de clima instantáneo",
             description = "Devuelve el último registro de clima instantáneo almacenado en Firebase."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Dato obtenido exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InstantWeather.class))),
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"temperature\": 25.5, \"humidity\": 80, \"windSpeed\": 15 }"),
+                            schema = @Schema(implementation = InstantWeather.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json"))
     })
@@ -72,7 +56,6 @@ public class WeatherDataController {
                         .build()));
     }
 
-
     @GetMapping("/hourly")
     @Operation(
             summary = "Obtener pronósticos por hora (últimas 48 horas)",
@@ -80,32 +63,14 @@ public class WeatherDataController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Datos obtenidos exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = HourlyForecast.class))),
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "[ { \"time\": \"2025-01-31T10:00:00Z\", \"temperature\": 18.3, \"humidity\": 75, \"windSpeed\": 10 }, { \"time\": \"2025-01-31T11:00:00Z\", \"temperature\": 19.1, \"humidity\": 73, \"windSpeed\": 12 } ]"),
+                            schema = @Schema(implementation = HourlyForecast.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json"))
     })
     public Mono<ResponseEntity<List<HourlyForecast>>> getHourlyForecastsLast48Hours() {
         return firebaseRealtimeService.getHourlyForecastsLast48Hours()
-                .map(ResponseEntity::ok)
-                .onErrorResume(e -> Mono.just(ResponseEntity
-                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .build()));
-    }
-
-
-    @Operation(
-            summary = "Obtener mapas de viento",
-            description = "Devuelve todos los registros de mapas de viento almacenados en Firebase."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Datos obtenidos exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = WindMap.class))),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
-                    content = @Content(mediaType = "application/json"))
-    })
-    @GetMapping("/wind-maps")
-    public Mono<ResponseEntity<List<WindMap>>> getAllWindMaps() {
-        return firebaseRealtimeService.getAllWindMaps()
                 .map(ResponseEntity::ok)
                 .onErrorResume(e -> Mono.just(ResponseEntity
                         .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -118,7 +83,9 @@ public class WeatherDataController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Registro más reciente obtenido exitosamente",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = WindMap.class))),
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"features\": [ { \"geometry\": { \"coordinates\": [ -3.7038, 40.4168 ] }, \"properties\": { \"windSpeed\": 12, \"windDirection\": 270 } } ] }"),
+                            schema = @Schema(implementation = WindMap.class))),
             @ApiResponse(responseCode = "204", description = "No hay registros disponibles"),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json"))
@@ -134,8 +101,11 @@ public class WeatherDataController {
                 })
                 .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<WindMap>build())); // Especificación explícita del tipo
     }
-    @Operation(summary = "Obtener el gráfico meteorológico (meteograma)",
-            description = "Devuelve un gráfico meteorológico en formato SVG para Madrid.")
+
+    @Operation(
+            summary = "Obtener el gráfico meteorológico (meteograma)",
+            description = "Devuelve un gráfico meteorológico en formato SVG para Madrid."
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Gráfico obtenido exitosamente",
                     content = @Content(mediaType = "image/svg+xml",
@@ -171,8 +141,4 @@ public class WeatherDataController {
                     }
                 });
     }
-
-
-
-
 }

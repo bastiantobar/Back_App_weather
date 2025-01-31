@@ -13,7 +13,7 @@ public class WeatherScheduler {
     }
 
     // Ejecutar cada 10 minutos para InstantWeather
-    @Scheduled(cron = "0 */10 * * * *") // Cada 10 minutos
+    @Scheduled(cron = "0 */10 * * * *")
     public void fetchAndPersistInstantWeather() {
         weatherService.getAndPersistInstantWeather()
                 .doOnError(error -> System.err.println("Error al persistir InstantWeather: " + error.getMessage()))
@@ -22,7 +22,7 @@ public class WeatherScheduler {
     }
 
     // Ejecutar una vez al día para HourlyForecast
-    @Scheduled(cron = "0 0 0 * * *") // Todos los días a medianoche
+    @Scheduled(cron = "0 0 0 * * *")
     public void fetchAndPersistHourlyForecast() {
         weatherService.getAndPersistHourlyForecast()
                 .doOnError(error -> System.err.println("Error al persistir HourlyForecast: " + error.getMessage()))
@@ -31,7 +31,7 @@ public class WeatherScheduler {
     }
 
     // Ejecutar una vez al día para WindMap
-    @Scheduled(cron = "0 0 0 * * *") // Todos los días a medianoche
+    @Scheduled(cron = "0 0 0 * * *")
     public void fetchAndPersistWindMap() {
         weatherService.getAndPersistWindMap()
                 .doOnError(error -> System.err.println("Error al persistir WindMap: " + error.getMessage()))

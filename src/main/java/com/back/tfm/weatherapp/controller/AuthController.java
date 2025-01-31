@@ -5,6 +5,7 @@ import com.back.tfm.weatherapp.dto.UserDto;
 import com.back.tfm.weatherapp.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -19,7 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-@Tag(name = "Authentication", description = "Endpoints for user authentication and registration")
+@Tag(name = "Autenticación", description = "Endpoints para autenticación y registro de usuarios en Firebase")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
@@ -31,10 +32,10 @@ public class AuthController {
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register a new user",
-            description = "Registers a new user in Firebase using an email and password",
+            summary = "Registrar un nuevo usuario",
+            description = "Registra un usuario en Firebase con email y contraseña",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "JSON object containing the email and password of the user to be registered",
+                    description = "JSON con los datos del usuario",
                     required = true,
                     content = @Content(
                             schema = @Schema(example = "{ \"email\": \"user@example.com\", \"password\": \"password123\" }")
@@ -42,33 +43,32 @@ public class AuthController {
             )
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "User registered successfully", content = @Content),
-            @ApiResponse(responseCode = "400", description = "Invalid input or registration error", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Usuario registrado exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"message\": \"Usuario registrado con UID: abc123\" }"))),
+            @ApiResponse(responseCode = "400", description = "Error en el registro",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"error\": \"Email y contraseña son obligatorios\" }")))
     })
-    public ResponseEntity<String> registerUser(@RequestBody UserDto userDto) {
+    public ResponseEntity<Map<String, String>> registerUser(@RequestBody UserDto userDto) {
         try {
-            logger.warn("Datos recibidos: email={}, password={}", userDto.getEmail(), userDto.getPassword());
-
             if (userDto.getEmail() == null || userDto.getPassword() == null) {
-                logger.warn("Email o contraseña no proporcionados");
-                return ResponseEntity.badRequest().body("Email y contraseña son obligatorios");
+                return ResponseEntity.badRequest().body(Map.of("error", "Email y contraseña son obligatorios"));
             }
 
-            // Llamada al servicio de autenticación para registrar al usuario
             String userId = authService.registerUser(userDto.getEmail(), userDto.getPassword());
-            return ResponseEntity.ok("Usuario registrado con UID: " + userId);
+            return ResponseEntity.ok(Map.of("message", "Usuario registrado con UID: " + userId));
         } catch (Exception e) {
-            logger.error("Error al registrar usuario: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("Error al registrar usuario: " + e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "Error al registrar usuario: " + e.getMessage()));
         }
     }
 
     @PostMapping("/login")
     @Operation(
-            summary = "Authenticate user",
-            description = "Authenticates a user in Firebase using email and password, and returns a JWT token",
+            summary = "Autenticar usuario",
+            description = "Inicia sesión en Firebase con email y contraseña y devuelve un token JWT",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "JSON object containing the email and password of the user to be authenticated",
+                    description = "JSON con el email y contraseña del usuario",
                     required = true,
                     content = @Content(
                             schema = @Schema(implementation = LoginRequestDto.class)
@@ -76,63 +76,56 @@ public class AuthController {
             )
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "User authenticated successfully", content = @Content),
-            @ApiResponse(responseCode = "400", description = "Invalid credentials or authentication error", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Usuario autenticado exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"token\": \"Bearer abcdef123456\" }"))),
+            @ApiResponse(responseCode = "400", description = "Credenciales inválidas o error de autenticación",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"error\": \"Error al autenticar usuario\" }")))
     })
     public ResponseEntity<Map<String, String>> loginUser(@RequestBody LoginRequestDto loginRequest) {
         try {
-            logger.warn("Intentando autenticar usuario con email={}", loginRequest.getEmail());
-
             if (loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Email y contraseña son obligatorios"));
             }
 
-            // Llamada al servicio de autenticación para validar al usuario
             String token = authService.authenticateUser(loginRequest.getEmail(), loginRequest.getPassword());
 
-            // Construir la respuesta como JSON
-            Map<String, String> response = new HashMap<>();
-            response.put("token", "Bearer " + token);
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(Map.of("token", "Bearer " + token));
         } catch (Exception e) {
-            logger.error("Error al autenticar usuario: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", "Error al autenticar usuario: " + e.getMessage()));
         }
     }
+
     @PostMapping("/update-fcm-token")
     @Operation(
             summary = "Actualizar el token de FCM del usuario",
-            description = "Actualiza el token de FCM asociado al UID del usuario autenticado"
+            description = "Guarda o actualiza el token de FCM del usuario autenticado"
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Token de FCM actualizado con éxito", content = @Content),
-            @ApiResponse(responseCode = "400", description = "Error al actualizar el token de FCM", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Token de FCM actualizado correctamente",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"message\": \"Token de FCM actualizado con éxito\" }"))),
+            @ApiResponse(responseCode = "400", description = "Error en la actualización",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{ \"error\": \"Token de FCM es requerido\" }")))
     })
-    public ResponseEntity<String> updateFcmToken(
+    public ResponseEntity<Map<String, String>> updateFcmToken(
             @RequestHeader("Authorization") String authToken,
             @RequestBody Map<String, String> request
     ) {
         try {
             String fcmToken = request.get("fcmToken");
-            logger.warn("Intentando autenticar usuario con fcmToken={}", fcmToken);
             if (fcmToken == null || fcmToken.isEmpty()) {
-                return ResponseEntity.badRequest().body("Token de FCM es requerido");
+                return ResponseEntity.badRequest().body(Map.of("error", "Token de FCM es requerido"));
             }
 
-            // Obtener el UID del usuario autenticado desde el token de Firebase
             String userId = authService.getUserIdFromToken(authToken);
-            logger.warn("Intentando autenticar usuario con userId={}", userId);
-
-            // Guardar el FCM Token en Firebase Realtime Database o Firestore
             authService.updateFcmTokenInDatabase(userId, fcmToken);
 
-            return ResponseEntity.ok("Token de FCM actualizado con éxito");
+            return ResponseEntity.ok(Map.of("message", "Token de FCM actualizado con éxito"));
         } catch (Exception e) {
-            logger.error("Error al actualizar token de FCM: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("Error al actualizar token de FCM: " + e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "Error al actualizar token de FCM: " + e.getMessage()));
         }
     }
-
-
 }
