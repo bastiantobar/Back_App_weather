@@ -6,6 +6,7 @@ import com.google.firebase.auth.FirebaseToken;
 import com.google.firebase.auth.UserRecord;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,9 +18,11 @@ import java.util.Map;
 @Service
 public class AuthService {
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
-    private static final String FIREBASE_API_KEY = "AIzaSyBQ4F2VK9t0dza3J9YX5qvx2DXtinW8u5U";
+    @Value("${firebase.api.key}")
+    private String firebaseApiKey;
+   // private static final String FIREBASE_API_KEY = "AIzaSyBQ4F2VK9t0dza3J9YX5qvx2DXtinW8u5U";
     private static final String FIREBASE_AUTH_URL =
-            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + FIREBASE_API_KEY;
+            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=";
 
     public String registerUser(String email, String password) throws FirebaseAuthException {
         UserRecord.CreateRequest request = new UserRecord.CreateRequest()
@@ -41,7 +44,7 @@ public class AuthService {
         );
 
         try {
-            HashMap<String, Object> response = restTemplate.postForObject(FIREBASE_AUTH_URL, request, HashMap.class);
+            HashMap<String, Object> response = restTemplate.postForObject(FIREBASE_AUTH_URL + firebaseApiKey, request, HashMap.class);
             logger.info("Token obtenido de Firebase para el usuario {}: {}", email, response.get("idToken"));
             return (String) response.get("idToken");
         } catch (Exception e) {

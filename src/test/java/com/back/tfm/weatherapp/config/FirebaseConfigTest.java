@@ -42,5 +42,5 @@ class FirebaseConfigTest {
     void setUp() {
         firebaseAppMockedStatic = mockStatic(FirebaseApp.class);
     }
-    
+
 }
