@@ -42,4 +42,12 @@ public class WebClientConfig {
                 .defaultHeader("User-Agent", "MyWeatherApp/1.0 (bastiantobar@example.com)")
                 .build();
     }
+    // Nuevo WebClient para la API de Sunrise-Sunset.org
+    @Bean
+    public WebClient sunriseSunsetWebClient(WebClient.Builder builder) {
+        return builder
+                .baseUrl("https://api.sunrise-sunset.org/")
+                .defaultHeader("User-Agent", "MyWeatherApp/1.0 (bastiantobar@example.com)")
+                .build();
+    }
 }

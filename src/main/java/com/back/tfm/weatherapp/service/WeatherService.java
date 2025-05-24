@@ -1,9 +1,6 @@
 package com.back.tfm.weatherapp.service;
 
-import com.back.tfm.weatherapp.dto.AirQuality;
-import com.back.tfm.weatherapp.dto.LocationCoordinates;
-import com.back.tfm.weatherapp.dto.LocationForecastResponse;
-import com.back.tfm.weatherapp.dto.WeatherResponse;
+import com.back.tfm.weatherapp.dto.*;
 import com.back.tfm.weatherapp.model.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,6 +13,7 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -32,6 +30,7 @@ public class WeatherService {
     private final WebClient yrNoWebClient;
     private final AirQualityService airQualityService;
     private final FirebaseRealtimeService firebaseRealtimeService;
+    private final SunriseSunsetService sunriseSunsetService;
 
     private static final long CACHE_EXPIRATION_WEATHER_SECONDS = 600;
     private static final long CACHE_EXPIRATION_WINDMAP_SECONDS = 1800;
@@ -39,13 +38,15 @@ public class WeatherService {
     public WeatherService(@Qualifier("metNoWebClient") WebClient metNoWebClient,
                           @Qualifier("yrNoWebClient") WebClient yrNoWebClient,
                           AirQualityService airQualityService,
-                          FirebaseRealtimeService firebaseRealtimeService) {
+                          FirebaseRealtimeService firebaseRealtimeService,
+                          SunriseSunsetService sunriseSunsetService) {
         this.metNoWebClient = metNoWebClient.mutate()
                 .filter(logResponse())
                 .build();
         this.yrNoWebClient = yrNoWebClient;
         this.airQualityService = airQualityService;
         this.firebaseRealtimeService = firebaseRealtimeService;
+        this.sunriseSunsetService = sunriseSunsetService;
     }
 
     private ExchangeFilterFunction logResponse() {
@@ -58,13 +59,17 @@ public class WeatherService {
     }
 
     public Mono<WeatherResponse> getAllWeatherData(double lat, double lon, String city, String country) {
+        LocalDate today = LocalDate.now(); // Obtener la fecha actual para la API de sunrise-sunset
+
         return Mono.zip(
                         getLocationForecastWithCache(lat, lon),
-                        airQualityService.getAirQuality(lat, lon)
+                        airQualityService.getAirQuality(lat, lon),
+                        sunriseSunsetService.getSunriseSunsetTimes(lat, lon, today) // <-- NUEVA LLAMADA AL SERVICIO
                 )
                 .map(tuple -> {
                     LocationForecastResponse forecastResponse = tuple.getT1();
                     AirQuality airQuality = tuple.getT2();
+                    SunriseSunsetResponse.Results astronomicalTimes = tuple.getT3(); // <-- NUEVA VARIABLE
 
                     InstantWeather instantWeather = getInstantWeatherFromMetNoResponse(forecastResponse);
                     List<HourlyForecast> hourlyForecasts = getHourlyForecastFromMetNoResponse(forecastResponse);
@@ -75,14 +80,15 @@ public class WeatherService {
                     firebaseRealtimeService.saveInstantWeather(instantWeather);
                     firebaseRealtimeService.saveHourlyForecasts(hourlyForecasts);
                     firebaseRealtimeService.saveWindMap(windMap);
+                    // Los datos de astronomicalTimes se manejan con caché en SunriseSunsetService.
 
                     return WeatherResponse.builder()
                             .location(locationCoordinates)
-                            // CORRECCIÓN: Usar 'currentWeather' para coincidir con el DTO
-                            .currentWeather(instantWeather) // <-- CAMBIO AQUÍ
+                            .currentWeather(instantWeather)
                             .hourlyForecasts(hourlyForecasts)
                             .windMap(windMap)
                             .airQuality(airQuality)
+                            .astronomicalTimes(astronomicalTimes) // <-- AÑADIR AL BUILDER
                             .build();
                 });
     }

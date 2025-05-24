@@ -9,6 +9,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.database.DatabaseError;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -22,9 +23,11 @@ import java.util.stream.Collectors;
 public class FirebaseRealtimeService {
 
     private final DatabaseReference databaseReference;
+    private final ObjectMapper objectMapper;
 
     public FirebaseRealtimeService(DatabaseReference databaseReference) {
         this.databaseReference = databaseReference;
+        this.objectMapper = new ObjectMapper();
     }
 
     public void saveInstantWeather(InstantWeather weather) {
@@ -152,46 +155,50 @@ public class FirebaseRealtimeService {
      * @param <T> El tipo de datos a recuperar.
      * @return Mono que emite el objeto cacheado o null si no se encuentra o hay un error.
      */
-    public <T> Mono<T> getGeoCache(String key, Class<T> clazz) { // <--- ¡Asegúrate de que sea genérico!
+    // Método getGeoCache genérico
+    public <T> Mono<T> getGeoCache(String key, Class<T> type) {
         return Mono.create(sink -> {
-            databaseReference.child("geocoding_cache").child(key)
-                    .addListenerForSingleValueEvent(new ValueEventListener() {
-                        @Override
-                        public void onDataChange(DataSnapshot dataSnapshot) {
-                            if (dataSnapshot.exists()) {
-                                try {
-                                    T cachedData = dataSnapshot.getValue(clazz);
-                                    System.out.println(">>> [FirebaseRealtimeService] Cache hit for " + key + ": " + cachedData);
-                                    sink.success(cachedData);
-                                } catch (Exception e) {
-                                    System.err.println("!!! [FirebaseRealtimeService] ERROR parsing cached data for " + key + ": " + e.getMessage());
-                                    e.printStackTrace();
-                                    sink.error(new RuntimeException("Error parsing cached data from Firebase for " + key, e));
+                    databaseReference.child("geocaching_cache").child(key) // Ruta consistente para todos los datos geográficos en caché
+                            .addListenerForSingleValueEvent(new ValueEventListener() {
+                                @Override
+                                public void onDataChange(DataSnapshot dataSnapshot) {
+                                    if (dataSnapshot.exists()) {
+                                        try {
+                                            // Usar ObjectMapper para convertir el Map genérico de Firebase al DTO deseado
+                                            T cachedObject = objectMapper.convertValue(dataSnapshot.getValue(), type);
+                                            System.out.println("--- [FirebaseRealtimeService] Cache hit for " + key + ", type: " + type.getSimpleName());
+                                            sink.success(cachedObject);
+                                        } catch (Exception e) {
+                                            System.err.println("!!! [FirebaseRealtimeService] Error converting cached data for " + key + " (type: " + type.getSimpleName() + "): " + e.getMessage());
+                                            sink.error(new RuntimeException("Error converting cached data", e));
+                                        }
+                                    } else {
+                                        System.out.println("--- [FirebaseRealtimeService] Cache miss for " + key);
+                                        sink.success(null); // Indica que no se encontraron datos
+                                    }
                                 }
-                            } else {
-                                System.out.println(">>> [FirebaseRealtimeService] Cache miss for " + key);
-                                sink.success(null);
-                            }
-                        }
 
-                        @Override
-                        public void onCancelled(DatabaseError databaseError) {
-                            System.err.println("!!! [FirebaseRealtimeService] Error fetching cache from Firebase for " + key + ": " + databaseError.getMessage());
-                            sink.error(new RuntimeException("Error reading cache", databaseError.toException()));
-                        }
-                    });
-        });
+                                @Override
+                                public void onCancelled(DatabaseError databaseError) {
+                                    System.err.println("!!! [FirebaseRealtimeService] Error fetching geocaching cache from Firebase for " + key + ": " + databaseError.getMessage());
+                                    sink.error(new RuntimeException("Error al leer caché de geocodificación", databaseError.toException()));
+                                }
+                            });
+                })
+                // CORRECCIÓN DE ERROR DE COMPILACIÓN: Añadir cast explícito a T
+                .flatMap(obj -> Mono.justOrEmpty((T) obj)); // Convierte null a Mono.empty() para manejar la ausencia de datos
     }
 
-    // Este método ahora es genérico para guardar cualquier objeto en el caché de geocodificación
-    public Mono<Void> saveGeoCache(String key, Object data) { // <--- ¡Asegúrate de que acepte Object!
+    // Método saveGeoCache genérico
+    public Mono<Void> saveGeoCache(String key, Object data) {
         return Mono.fromFuture(
                 CompletableFuture.runAsync(() -> {
                     try {
-                        databaseReference.child("geocoding_cache").child(key).setValueAsync(data);
+                        databaseReference.child("geocaching_cache").child(key).setValueAsync(data); // Ruta consistente
+                        System.out.println("--- [FirebaseRealtimeService] Saved data to geocaching_cache for key: " + key);
                     } catch (Exception e) {
-                        System.err.println("!!! [FirebaseRealtimeService] Error saving data to geocoding cache: " + e.getMessage());
-                        throw new RuntimeException("Failed to save data to geocoding cache", e);
+                        System.err.println("!!! [FirebaseRealtimeService] Error saving geocaching cache to Firebase for key: " + key + ": " + e.getMessage());
+                        throw new RuntimeException("Failed to save geocaching cache", e);
                     }
                 })
         );
