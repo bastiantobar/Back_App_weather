@@ -1,6 +1,9 @@
+// src/main/java/com/back/tfm/weatherapp/controller/WeatherController.java
 package com.back.tfm.weatherapp.controller;
 
 import com.back.tfm.weatherapp.dto.LocationCoordinates;
+import com.back.tfm.weatherapp.dto.WeatherResponse; // Importa tu DTO de respuesta consolidada
+import com.back.tfm.weatherapp.model.ErrorResponse; // Importa tu modelo de respuesta de error
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.model.WindMap;
@@ -35,7 +38,7 @@ public class WeatherController {
     private final WeatherService weatherService;
     private final GeocodingService geocodingService;
 
-    public WeatherController(FirebaseRealtimeService firebaseRealtimeService, WeatherService weatherService,GeocodingService geocodingService) {
+    public WeatherController(FirebaseRealtimeService firebaseRealtimeService, WeatherService weatherService, GeocodingService geocodingService) {
         this.firebaseRealtimeService = firebaseRealtimeService;
         this.weatherService = weatherService;
         this.geocodingService = geocodingService;
@@ -148,59 +151,130 @@ public class WeatherController {
                 });
     }
 
-    /**
-     * Este es el endpoint para obtener solo las coordenadas de una ubicación.
-     * Es independiente de los datos de clima, aire, etc.
-     */
-    @Operation(
-            summary = "Obtener coordenadas geográficas por ciudad y país",
-            description = "Dado el nombre de una ciudad y país, devuelve sus coordenadas geográficas (latitud, longitud), nombre completo y código de país. (Firebase bypass activo para depuración)"
-    )
+    @Operation(summary = "Obtiene un reporte meteorológico completo (actuales, pronóstico por hora, mapa de viento y calidad del aire) para una ubicación específica.",
+            description = "Combina llamadas a servicios de geocodificación y pronóstico meteorológico para proporcionar un conjunto completo de datos. Incluye manejo de caché para mejorar el rendimiento.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Datos meteorológicos obtenidos exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.back.tfm.weatherapp.dto.WeatherResponse.class),
+                            examples = @ExampleObject(value = "{ \"location\": { \"cityName\": \"Santiago\", \"latitude\": -33.4489, \"longitude\": -70.6693, \"countryName\": \"Chile\" }, \"instantWeather\": { \"airTemperature\": 15.0, \"relativeHumidity\": 70.0, \"airPressureAtSeaLevel\": 1012.5, \"windSpeed\": 5.0, \"cloudAreaFraction\": 50.0 }, \"hourlyForecasts\": [ { \"time\": \"2025-01-01T10:00:00Z\", \"airTemperature\": 16.0, \"windSpeed\": 4.5, \"precipitationAmount\": 0.0 }, { \"time\": \"2025-01-01T11:00:00Z\", \"airTemperature\": 17.0, \"windSpeed\": 4.0, \"precipitationAmount\": 0.0 } ], \"windMap\": { \"type\": \"FeatureCollection\", \"features\": [ { \"type\": \"Feature\", \"geometry\": { \"type\": \"Point\", \"coordinates\": [ -70.6693, -33.4489 ] }, \"properties\": { \"windSpeed\": 5.0, \"windDirection\": 270.0, \"time\": \"2025-01-01T09:00:00Z\" } } ] }, \"airQuality\": { \"latitude\": -33.4489, \"longitude\": -70.6693, \"aqi\": 2, \"components\": { \"co\": 200.0, \"no\": 0.5, \"no2\": 10.0, \"o3\": 40.0, \"so2\": 2.0, \"pm2_5\": 15.0, \"pm10\": 25.0, \"nh3\": 0.1 }, \"timestamp\": 1678886400, \"aqiCategory\": \"Fair\" } }"))),
+            @ApiResponse(responseCode = "400", description = "Parámetros de entrada inválidos o ubicación no encontrada",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class)))
+    })
+    @GetMapping("/full-report") // <-- Corregido: Vuelve a ser /full-report
+    public Mono<ResponseEntity<com.back.tfm.weatherapp.dto.WeatherResponse>> getFullWeatherReport( // <-- Corregido: Nombre del método
+                                                                                                   @Parameter(description = "Nombre de la ciudad", required = true, example = "Santiago") @RequestParam String city,
+                                                                                                   @Parameter(description = "Nombre del país", required = true, example = "Chile") @RequestParam String country) {
+
+        System.out.println("--- [Controller] Recibida solicitud /full-report para ciudad: " + city + ", país: " + country + " ---");
+
+        if (city == null || city.trim().isEmpty() || country == null || country.trim().isEmpty()) {
+            System.err.println("!!! [Controller] Error 400: Ciudad o país no pueden ser vacíos.");
+            return Mono.just(ResponseEntity.badRequest().<com.back.tfm.weatherapp.dto.WeatherResponse>build()); // Asegura el tipo
+        }
+
+        System.out.println(">>> [Controller] Llamando a GeocodingService.getCoordinates para obtener lat/lon...");
+        return geocodingService.getCoordinates(city, country)
+                .flatMap(coords -> {
+                    System.out.println("<<< [Controller] Coordenadas obtenidas: " + coords.getLatitude() + ", " + coords.getLongitude());
+                    System.out.println(">>> [Controller] Llamando a WeatherService.getAllWeatherData...");
+                    return weatherService.getAllWeatherData(
+                                    coords.getLatitude(),
+                                    coords.getLongitude(),
+                                    city,
+                                    country
+                            )
+                            .map(weatherResponse -> {
+                                System.out.println("<<< [Controller] WeatherService.getAllWeatherData completado exitosamente.");
+                                return ResponseEntity.ok(weatherResponse);
+                            })
+                            .onErrorResume(e -> {
+                                System.err.println("!!! [Controller] Error en WeatherService.getAllWeatherData: " + e.getMessage());
+                                e.printStackTrace();
+                                return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                            });
+                })
+                .onErrorResume(IllegalArgumentException.class, e -> {
+                    System.err.println("!!! [Controller] Error 400: Ubicación no encontrada por GeocodingService. Mensaje: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                })
+                .onErrorResume(e -> {
+                    System.err.println("!!! [Controller] Error 500: Fallo inesperado en /full-report. Mensaje: " + e.getMessage());
+                    e.printStackTrace();
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                })
+                .doFinally(signalType -> {
+                    System.out.println("--- [Controller] Solicitud /full-report finalizada con estado: " + signalType + " ---");
+                });
+    }
+
+    @Operation(summary = "Obtiene el meteograma de Yr.no como imagen SVG.",
+            description = "Devuelve un archivo SVG que representa el meteograma de pronóstico.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Meteograma obtenido exitosamente",
+                    content = @Content(mediaType = "image/svg+xml")),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor al obtener el meteograma")
+    })
+    @GetMapping("/meteogram")
+    public Mono<ResponseEntity<byte[]>> getMeteogram() {
+        System.out.println("--- [Controller] Recibida solicitud /meteogram ---");
+        return weatherService.getMeteogramAsBytes()
+                .map(svgBytes -> {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.add(HttpHeaders.CONTENT_TYPE, "image/svg+xml");
+                    return new ResponseEntity<>(svgBytes, headers, HttpStatus.OK);
+                })
+                .doOnError(e -> System.err.println("!!! [Controller] Error al obtener el meteograma: " + e.getMessage()))
+                .onErrorReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+    }
+
+    @Operation(summary = "Obtiene las coordenadas geográficas para una ciudad y país dados.",
+            description = "Usa un servicio de geocodificación para convertir un nombre de ciudad y país en latitud y longitud.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Coordenadas obtenidas exitosamente",
                     content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = "{\n  \"name\": \"Hijuelas, Región de Valparaíso, Chile\",\n  \"latitude\": -32.8339845,\n  \"longitude\": -71.1895697,\n  \"countryCode\": \"CL\"\n}"),
-                            schema = @Schema(implementation = LocationCoordinates.class))),
-            @ApiResponse(responseCode = "400", description = "Parámetros de entrada inválidos (ej. ciudad/país faltante o no encontrado)",
-                    content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{}"))),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor al procesar la solicitud de geocodificación",
-                    content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{}")))
+                            schema = @Schema(implementation = LocationCoordinates.class),
+                            examples = @ExampleObject(value = "{ \"cityName\": \"Santiago\", \"latitude\": -33.4489, \"longitude\": -70.6693, \"countryName\": \"Chile\" }"))),
+            @ApiResponse(responseCode = "400", description = "Parámetros de entrada inválidos o ubicación no encontrada",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class)))
     })
-    @GetMapping("/location") // El endpoint final para las coordenadas
-    public Mono<ResponseEntity<LocationCoordinates>> getLocationCoordinates(
-            @Parameter(description = "Nombre de la ciudad.", required = true, example = "Hijuelas")
-            @RequestParam String city,
-            @Parameter(description = "Nombre del país.", required = true, example = "Chile")
-            @RequestParam String country) {
+    @GetMapping("/location")
+    public Mono<ResponseEntity<LocationCoordinates>> getLocation(
+            @Parameter(description = "Nombre de la ciudad", required = true, example = "Santiago") @RequestParam String city,
+            @Parameter(description = "Nombre del país", required = true, example = "Chile") @RequestParam String country) {
 
-        System.out.println(">>> [Controller] Recibida solicitud para /location");
-        System.out.println(">>> [Controller] Ciudad: '" + city + "', País: '" + country + "'");
+        System.out.println("--- [Controller] Recibida solicitud /location para ciudad: " + city + ", país: " + country + " ---");
 
         if (city == null || city.trim().isEmpty() || country == null || country.trim().isEmpty()) {
-            System.err.println("<<< [Controller] Error 400: Parámetros de ciudad o país vacíos.");
-            return Mono.just(ResponseEntity.badRequest().build()); // Retorna 400 Bad Request
+            System.err.println("!!! [Controller] Error 400: Ciudad o país no pueden ser vacíos.");
+            return Mono.just(ResponseEntity.badRequest().build());
         }
 
-        // Llama al GeocodingService para obtener las coordenadas
         System.out.println(">>> [Controller] Llamando a GeocodingService.getCoordinates...");
         return geocodingService.getCoordinates(city, country)
                 .map(coords -> {
                     System.out.println("<<< [Controller] GeocodingService completado exitosamente. Coordenadas obtenidas: " + coords);
-                    return ResponseEntity.ok(coords); // Si éxito, retorna 200 OK con el DTO
+                    return ResponseEntity.ok(coords);
                 })
                 .onErrorResume(IllegalArgumentException.class, e -> {
                     System.err.println("<<< [Controller] Error 400: Ubicación no encontrada por GeocodingService. Mensaje: " + e.getMessage());
-                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).build()); // Retorna 400
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).build());
                 })
                 .onErrorResume(e -> {
                     System.err.println("<<< [Controller] Error 500: Fallo inesperado en /location. Mensaje: " + e.getMessage());
                     e.printStackTrace();
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()); // Retorna 500
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
                 })
                 .doFinally(signalType -> {
                     System.out.println("--- [Controller] Solicitud /location finalizada con estado: " + signalType + " ---");
                 });
     }
-
-
 }

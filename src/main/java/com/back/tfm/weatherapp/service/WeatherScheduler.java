@@ -6,14 +6,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class WeatherScheduler {
 
+
     private final WeatherService weatherService;
 
     public WeatherScheduler(WeatherService weatherService) {
         this.weatherService = weatherService;
     }
 
-    // Ejecutar cada 10 minutos para InstantWeather
-    @Scheduled(cron = "0 */10 * * * *")
+
+    //@Scheduled(cron = "0 */10 * * * *")
+     /*
     public void fetchAndPersistInstantWeather() {
         weatherService.getAndPersistInstantWeather()
                 .doOnError(error -> System.err.println("Error al persistir InstantWeather: " + error.getMessage()))
@@ -37,5 +39,5 @@ public class WeatherScheduler {
                 .doOnError(error -> System.err.println("Error al persistir WindMap: " + error.getMessage()))
                 .subscribe();
         System.out.println("Tarea programada ejecutada: Datos WindMap consumidos y persistidos.");
-    }
+    }*/
 }

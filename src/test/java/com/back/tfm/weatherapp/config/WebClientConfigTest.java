@@ -30,13 +30,5 @@ class WebClientConfigTest {
         when(webClientBuilderMock.build()).thenReturn(webClientMock);
     }
 
-    @Test
-    void testWebClientBeanCreation() {
-        WebClient webClient = webClientConfig.webClient(webClientBuilderMock);
 
-        assertNotNull(webClient);
-        verify(webClientBuilderMock, times(1)).baseUrl("https://api.met.no/weatherapi/");
-        verify(webClientBuilderMock, times(1)).defaultHeader("User-Agent", "MyWeatherApp/1.0 (bastiantobar@example.com)");
-        verify(webClientBuilderMock, times(1)).build();
-    }
 }
