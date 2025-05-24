@@ -1,12 +1,15 @@
 package com.back.tfm.weatherapp.controller;
 
+import com.back.tfm.weatherapp.dto.LocationCoordinates;
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.model.WindMap;
 import com.back.tfm.weatherapp.service.FirebaseRealtimeService;
+import com.back.tfm.weatherapp.service.GeocodingService;
 import com.back.tfm.weatherapp.service.WeatherService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -17,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -29,10 +33,12 @@ public class WeatherController {
 
     private final FirebaseRealtimeService firebaseRealtimeService;
     private final WeatherService weatherService;
+    private final GeocodingService geocodingService;
 
-    public WeatherController(FirebaseRealtimeService firebaseRealtimeService, WeatherService weatherService) {
+    public WeatherController(FirebaseRealtimeService firebaseRealtimeService, WeatherService weatherService,GeocodingService geocodingService) {
         this.firebaseRealtimeService = firebaseRealtimeService;
         this.weatherService = weatherService;
+        this.geocodingService = geocodingService;
     }
 
     @Operation(
@@ -141,4 +147,60 @@ public class WeatherController {
                     }
                 });
     }
+
+    /**
+     * Este es el endpoint para obtener solo las coordenadas de una ubicación.
+     * Es independiente de los datos de clima, aire, etc.
+     */
+    @Operation(
+            summary = "Obtener coordenadas geográficas por ciudad y país",
+            description = "Dado el nombre de una ciudad y país, devuelve sus coordenadas geográficas (latitud, longitud), nombre completo y código de país. (Firebase bypass activo para depuración)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Coordenadas obtenidas exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n  \"name\": \"Hijuelas, Región de Valparaíso, Chile\",\n  \"latitude\": -32.8339845,\n  \"longitude\": -71.1895697,\n  \"countryCode\": \"CL\"\n}"),
+                            schema = @Schema(implementation = LocationCoordinates.class))),
+            @ApiResponse(responseCode = "400", description = "Parámetros de entrada inválidos (ej. ciudad/país faltante o no encontrado)",
+                    content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{}"))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor al procesar la solicitud de geocodificación",
+                    content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{}")))
+    })
+    @GetMapping("/location") // El endpoint final para las coordenadas
+    public Mono<ResponseEntity<LocationCoordinates>> getLocationCoordinates(
+            @Parameter(description = "Nombre de la ciudad.", required = true, example = "Hijuelas")
+            @RequestParam String city,
+            @Parameter(description = "Nombre del país.", required = true, example = "Chile")
+            @RequestParam String country) {
+
+        System.out.println(">>> [Controller] Recibida solicitud para /location");
+        System.out.println(">>> [Controller] Ciudad: '" + city + "', País: '" + country + "'");
+
+        if (city == null || city.trim().isEmpty() || country == null || country.trim().isEmpty()) {
+            System.err.println("<<< [Controller] Error 400: Parámetros de ciudad o país vacíos.");
+            return Mono.just(ResponseEntity.badRequest().build()); // Retorna 400 Bad Request
+        }
+
+        // Llama al GeocodingService para obtener las coordenadas
+        System.out.println(">>> [Controller] Llamando a GeocodingService.getCoordinates...");
+        return geocodingService.getCoordinates(city, country)
+                .map(coords -> {
+                    System.out.println("<<< [Controller] GeocodingService completado exitosamente. Coordenadas obtenidas: " + coords);
+                    return ResponseEntity.ok(coords); // Si éxito, retorna 200 OK con el DTO
+                })
+                .onErrorResume(IllegalArgumentException.class, e -> {
+                    System.err.println("<<< [Controller] Error 400: Ubicación no encontrada por GeocodingService. Mensaje: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).build()); // Retorna 400
+                })
+                .onErrorResume(e -> {
+                    System.err.println("<<< [Controller] Error 500: Fallo inesperado en /location. Mensaje: " + e.getMessage());
+                    e.printStackTrace();
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()); // Retorna 500
+                })
+                .doFinally(signalType -> {
+                    System.out.println("--- [Controller] Solicitud /location finalizada con estado: " + signalType + " ---");
+                });
+    }
+
+
 }

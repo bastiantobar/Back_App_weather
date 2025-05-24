@@ -1,5 +1,6 @@
 package com.back.tfm.weatherapp.service;
 
+import com.back.tfm.weatherapp.dto.LocationCoordinates;
 import com.back.tfm.weatherapp.model.HourlyForecast;
 import com.back.tfm.weatherapp.model.InstantWeather;
 import com.back.tfm.weatherapp.model.WindMap;
@@ -113,7 +114,9 @@ public class FirebaseRealtimeService {
                 List<T> data = new ArrayList<>();
                 for (DataSnapshot childSnapshot : snapshot.getChildren()) {
                     T value = childSnapshot.getValue(clazz);
-                    data.add(value);
+                    if (value != null) { // Añadir verificación de nulos al obtener el valor
+                        data.add(value);
+                    }
                 }
                 future.complete(data);
             }
@@ -141,6 +144,54 @@ public class FirebaseRealtimeService {
                         }
                     });
         });
+    }
+
+
+    public <T> Mono<T> getGeoCache(String key, Class<T> clazz) {
+        return Mono.create(sink -> {
+            System.out.println("--- [FirebaseRealtimeService] Iniciando getGeoCache para clave: " + key + " en el Mono.create.");
+            databaseReference.child("geocoding_cache").child(key)
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(DataSnapshot dataSnapshot) {
+                            System.out.println("--- [FirebaseRealtimeService] Callback onDataChange disparado para: " + key);
+                            if (dataSnapshot.exists()) {
+                                try {
+                                    T cachedData = dataSnapshot.getValue(clazz); // <-- ¡Aquí es donde creemos que falla!
+                                    System.out.println(">>> [FirebaseRealtimeService] Cache hit for " + key + ". Data: " + cachedData);
+                                    sink.success(cachedData);
+                                } catch (Exception e) {
+                                    System.err.println("!!! [FirebaseRealtimeService] ERROR al parsear datos de caché para " + key + ": " + e.getMessage());
+                                    e.printStackTrace();
+                                    sink.error(new RuntimeException("Error al parsear datos de caché de Firebase para " + key, e));
+                                }
+                            } else {
+                                System.out.println(">>> [FirebaseRealtimeService] Cache miss for " + key);
+                                sink.success(null);
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(DatabaseError databaseError) {
+                            System.err.println("--- [FirebaseRealtimeService] Callback onCancelled disparado para: " + key);
+                            System.err.println("!!! [FirebaseRealtimeService] Error fetching geocoding cache from Firebase for " + key + ": " + databaseError.getMessage());
+                            sink.error(new RuntimeException("Error al leer caché de geocodificación", databaseError.toException()));
+                        }
+                    });
+        });
+    }
+
+    public Mono<Void> saveGeoCache(String key, LocationCoordinates data) {
+        return Mono.fromFuture(
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        databaseReference.child("geocoding_cache").child(key).setValueAsync(data);
+                    } catch (Exception e) {
+                        System.err.println("!!! [FirebaseRealtimeService] Error saving geocoding cache to Firebase: " + e.getMessage());
+                        throw new RuntimeException("Failed to save geocoding cache", e);
+                    }
+                })
+        );
     }
 
 }
