@@ -1,6 +1,7 @@
 package com.back.tfm.weatherapp.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // <--- ¡Importa esta anotación!
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -21,6 +22,7 @@ public class SunriseSunsetResponse {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true) // <--- ¡Añade esta línea aquí!
     @Schema(description = "Detalles de los tiempos astronómicos")
     public static class Results {
         @Schema(description = "Hora de salida del sol en formato HH:MM:SS AM/PM")
@@ -32,7 +34,7 @@ public class SunriseSunsetResponse {
         private String solarNoon;
         @JsonProperty("day_length")
         @Schema(description = "Duración del día en formato HH:MM:SS")
-        private String dayLength;
+        private String dayLength; // Este campo ya está mapeado a "day_length" de JSON
         @JsonProperty("civil_twilight_begin")
         @Schema(description = "Inicio del crepúsculo civil")
         private String civilTwilightBegin;
