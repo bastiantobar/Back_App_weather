@@ -10,6 +10,7 @@ import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.database.DatabaseError;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature; // ¡Importa esto!
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -18,16 +19,20 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule; // ¡Importa esto para tipos de fecha Java 8!
 
 @Service
 public class FirebaseRealtimeService {
 
     private final DatabaseReference databaseReference;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper; // Solo un ObjectMapper
 
     public FirebaseRealtimeService(DatabaseReference databaseReference) {
         this.databaseReference = databaseReference;
         this.objectMapper = new ObjectMapper();
+        // ¡Configura el ObjectMapper aquí! ESTO ES CRUCIAL
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     public void saveInstantWeather(InstantWeather weather) {
@@ -56,19 +61,28 @@ public class FirebaseRealtimeService {
 
                     return hourlyForecasts.stream()
                             .filter(forecast -> {
-                                Instant forecastTime = Instant.parse(forecast.getTime()); // Asegúrate de que `getTime` sea un formato ISO-8601
-                                return forecastTime.isAfter(last48Hours);
+                                // Asegúrate de que `getTime()` devuelve un formato ISO-8601 si es un String
+                                try {
+                                    Instant forecastTime = Instant.parse(forecast.getTime());
+                                    return forecastTime.isAfter(last48Hours);
+                                } catch (java.time.format.DateTimeParseException e) {
+                                    System.err.println("Error parsing forecast time: " + forecast.getTime() + " - " + e.getMessage());
+                                    return false; // Filtra los que no se puedan parsear
+                                }
                             })
                             .collect(Collectors.toList());
                 });
     }
     public Mono<InstantWeather> getLastInstantWeather() {
-        return fetchFromFirebase("HourlyForecasts", InstantWeather.class)
+        // CORRECCIÓN: Apuntar al nodo correcto si InstantWeather se guarda allí
+        return fetchFromFirebase("InstantWeather", InstantWeather.class)
                 .flatMap(list -> {
-                    if (list.isEmpty()) {
+                    if (list == null || list.isEmpty()) { // Añadir null check para la lista
                         return Mono.empty();
                     }
-                    return Mono.just(list.get(list.size() - 1)); // Obtener el último registro
+                    // Asumiendo que el último elemento es el más reciente o el que deseas.
+                    // Podrías necesitar un ordenamiento por tiempo si no lo garantizan.
+                    return Mono.just(list.get(list.size() - 1));
                 });
     }
     public Mono<WindMap> getLastWindMap() {
@@ -80,11 +94,19 @@ public class FirebaseRealtimeService {
                     @Override
                     public void onDataChange(DataSnapshot snapshot) {
                         for (DataSnapshot childSnapshot : snapshot.getChildren()) {
-                            WindMap fullMap = childSnapshot.getValue(WindMap.class);
+                            // Usamos el 'objectMapper' configurado para la deserialización
+                            WindMap fullMap = objectMapper.convertValue(childSnapshot.getValue(), WindMap.class);
                             if (fullMap != null && fullMap.getFeatures() != null) {
                                 List<WindMapPoint> features = fullMap.getFeatures();
                                 WindMapPoint latestFeature = features.stream()
-                                        .max(Comparator.comparing(f -> f.getProperties().getTime()))
+                                        .max(Comparator.comparing(f -> {
+                                            try {
+                                                return Instant.parse(f.getProperties().getTime());
+                                            } catch (java.time.format.DateTimeParseException e) {
+                                                System.err.println("Error parsing WindMapPoint time: " + f.getProperties().getTime() + " - " + e.getMessage());
+                                                return Instant.EPOCH; // Retorna un Instant base para no fallar el comparator
+                                            }
+                                        }))
                                         .orElse(null);
 
                                 if (latestFeature != null) {
@@ -114,9 +136,17 @@ public class FirebaseRealtimeService {
             public void onDataChange(DataSnapshot snapshot) {
                 List<T> data = new ArrayList<>();
                 for (DataSnapshot childSnapshot : snapshot.getChildren()) {
-                    T value = childSnapshot.getValue(clazz);
-                    if (value != null) { // Añadir verificación de nulos al obtener el valor
-                        data.add(value);
+                    try {
+                        // ¡Usa nuestro ObjectMapper configurado para cada elemento de la lista!
+                        T value = objectMapper.convertValue(childSnapshot.getValue(), clazz);
+                        if (value != null) {
+                            data.add(value);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("!!! [FirebaseRealtimeService] Error convirtiendo datos para " + node + " (tipo: " + clazz.getSimpleName() + "): " + e.getMessage());
+                        // Decide si quieres lanzar una excepción o simplemente omitir el elemento defectuoso
+                        // future.completeExceptionally(new RuntimeException("Error al convertir elemento de la lista", e));
+                        // return; // Salir si hay un error para evitar añadir datos incorrectos
                     }
                 }
                 future.complete(data);
@@ -147,7 +177,6 @@ public class FirebaseRealtimeService {
         });
     }
 
-
     /**
      * Intenta obtener datos de cualquier tipo desde el caché de Firebase Realtime Database.
      * @param key La clave del caché.
@@ -158,35 +187,34 @@ public class FirebaseRealtimeService {
     // Método getGeoCache genérico
     public <T> Mono<T> getGeoCache(String key, Class<T> type) {
         return Mono.create(sink -> {
-                    databaseReference.child("geocaching_cache").child(key) // Ruta consistente para todos los datos geográficos en caché
-                            .addListenerForSingleValueEvent(new ValueEventListener() {
-                                @Override
-                                public void onDataChange(DataSnapshot dataSnapshot) {
-                                    if (dataSnapshot.exists()) {
-                                        try {
-                                            // Usar ObjectMapper para convertir el Map genérico de Firebase al DTO deseado
-                                            T cachedObject = objectMapper.convertValue(dataSnapshot.getValue(), type);
-                                            System.out.println("--- [FirebaseRealtimeService] Cache hit for " + key + ", type: " + type.getSimpleName());
-                                            sink.success(cachedObject);
-                                        } catch (Exception e) {
-                                            System.err.println("!!! [FirebaseRealtimeService] Error converting cached data for " + key + " (type: " + type.getSimpleName() + "): " + e.getMessage());
-                                            sink.error(new RuntimeException("Error converting cached data", e));
-                                        }
-                                    } else {
-                                        System.out.println("--- [FirebaseRealtimeService] Cache miss for " + key);
-                                        sink.success(null); // Indica que no se encontraron datos
-                                    }
+            databaseReference.child("geocaching_cache").child(key) // Ruta consistente para todos los datos geográficos en caché
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(DataSnapshot dataSnapshot) {
+                            if (dataSnapshot.exists()) {
+                                try {
+                                    // Usar ObjectMapper para convertir el Map genérico de Firebase al DTO deseado
+                                    T cachedObject = objectMapper.convertValue(dataSnapshot.getValue(), type);
+                                    System.out.println("--- [FirebaseRealtimeService] Cache hit for " + key + ", type: " + type.getSimpleName());
+                                    sink.success(cachedObject);
+                                } catch (Exception e) {
+                                    System.err.println("!!! [FirebaseRealtimeService] Error converting cached data for " + key + " (type: " + type.getSimpleName() + "): " + e.getMessage());
+                                    sink.error(new RuntimeException("Error converting cached data", e));
                                 }
+                            } else {
+                                System.out.println("--- [FirebaseRealtimeService] Cache miss for " + key);
+                                sink.success(null); // Indica que no se encontraron datos
+                            }
+                        }
 
-                                @Override
-                                public void onCancelled(DatabaseError databaseError) {
-                                    System.err.println("!!! [FirebaseRealtimeService] Error fetching geocaching cache from Firebase for " + key + ": " + databaseError.getMessage());
-                                    sink.error(new RuntimeException("Error al leer caché de geocodificación", databaseError.toException()));
-                                }
-                            });
-                })
-                // CORRECCIÓN DE ERROR DE COMPILACIÓN: Añadir cast explícito a T
-                .flatMap(obj -> Mono.justOrEmpty((T) obj)); // Convierte null a Mono.empty() para manejar la ausencia de datos
+                        @Override
+                        public void onCancelled(DatabaseError databaseError) {
+                            System.err.println("!!! [FirebaseRealtimeService] Error fetching geocaching cache from Firebase for " + key + ": " + databaseError.getMessage());
+                            sink.error(new RuntimeException("Error al leer caché de geocodificación", databaseError.toException()));
+                        }
+                    });
+        })
+                ; // Cierra el Mono.create, eliminando la línea .flatMap
     }
 
     // Método saveGeoCache genérico
@@ -194,6 +222,10 @@ public class FirebaseRealtimeService {
         return Mono.fromFuture(
                 CompletableFuture.runAsync(() -> {
                     try {
+                        // Firebase Realtime Database SDK usa su propio ObjectMapper para setValueAsync.
+                        // Si 'data' contiene tipos como OffsetDateTime, la clave es que el DTO
+                        // tenga los `@JsonProperty` y Lombok `@NoArgsConstructor`/`@AllArgsConstructor`
+                        // correctos, y que Firebase internamente maneje bien la serialización.
                         databaseReference.child("geocaching_cache").child(key).setValueAsync(data); // Ruta consistente
                         System.out.println("--- [FirebaseRealtimeService] Saved data to geocaching_cache for key: " + key);
                     } catch (Exception e) {
@@ -203,5 +235,4 @@ public class FirebaseRealtimeService {
                 })
         );
     }
-
 }

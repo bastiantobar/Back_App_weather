@@ -17,9 +17,6 @@ public class SunriseSunsetService {
     private final WebClient sunriseSunsetWebClient;
     private final FirebaseRealtimeService firebaseRealtimeService;
 
-    // Cache expiration time for sunrise/sunset data (e.g., 24 hours in seconds).
-    // The API response doesn't have an "updated_at", so we rely on this.
-    // For simplicity, we'll store the `Results` object directly.
     private static final long CACHE_EXPIRATION_SECONDS = 24 * 3600; // 24 hours
 
     public SunriseSunsetService(@Qualifier("sunriseSunsetWebClient") WebClient sunriseSunsetWebClient,
@@ -35,17 +32,16 @@ public class SunriseSunsetService {
 
         System.out.println(">>> [SunriseSunsetService] Intentando obtener Sunrise/Sunset desde caché para key: " + cacheKey);
 
-        // Intenta obtener de la caché. `getGeoCache` devolverá Mono.empty() si no encuentra o está expirado.
-        return firebaseRealtimeService.getGeoCache(cacheKey, SunriseSunsetResponse.Results.class)
-                .flatMap(cachedData -> {
-                    // Aquí asumimos que getGeoCache o el mecanismo de Firebase ya determinó la validez.
-                    // Si cachedData no es null, se considera válido para esta invocación.
-                    if (cachedData != null) {
-                        System.out.println("<<< [SunriseSunsetService] Sirviendo Sunrise/Sunset desde caché para " + lat + ", " + lon + ", " + dateString + ".");
-                        return Mono.just(cachedData);
+        return firebaseRealtimeService.getGeoCache(cacheKey, SunriseSunsetResponse.class)
+                .flatMap(cachedResponse -> {
+                    if (cachedResponse != null && cachedResponse.getResults() != null) {
+                        System.out.println("<<< [SunriseSunsetService] Sirviendo Sunrise/Sunset desde caché.");
+                        System.out.println("--- [SunriseSunsetService] Contenido de caché: " + cachedResponse.getResults());
+                        return Mono.just(cachedResponse.getResults());
+                    } else {
+                        System.out.println("--- [SunriseSunsetService] Contenido de caché nulo o sin results.");
+                        return Mono.empty();
                     }
-                    System.out.println("--- [SunriseSunsetService] Cache miss para Sunrise/Sunset. Pasando a switchIfEmpty.");
-                    return Mono.empty(); // Indica caché fallida
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     System.out.println(">>> [SunriseSunsetService] switchIfEmpty: No encontrado en caché o expirado. Llamando a Sunrise-Sunset API.");
@@ -53,6 +49,7 @@ public class SunriseSunsetService {
                 }))
                 .doOnError(e -> System.err.println("!!! [SunriseSunsetService] Error en getSunriseSunsetTimes: " + e.getMessage()));
     }
+
 
     private Mono<SunriseSunsetResponse.Results> callSunriseSunsetApi(double lat, double lon, String dateString, String cacheKey) {
         String url = String.format(Locale.US, "json?lat=%.7f&lng=%.7f&date=%s", lat, lon, dateString);
@@ -69,8 +66,8 @@ public class SunriseSunsetService {
                     if ("OK".equalsIgnoreCase(apiResponse.getStatus()) && apiResponse.getResults() != null) {
                         System.out.println("--- [SunriseSunsetService] Sunrise-Sunset API response recibida y deserializada.");
 
-                        // *** AÑADE ESTA LÍNEA PARA VERIFICAR EL OBJETO COMPLETO ANTES DE CACHE ***
-                        System.out.println("--- [SunriseSunsetService] Objeto Results a guardar en caché: " + apiResponse.getResults());
+                        // *** AÑADIR LOG PARA VER EL OBJETO COMPLETO DE LA API ANTES DE CACHE ***
+                        System.out.println("--- [SunriseSunsetService] Objeto Results de API (antes de guardar): " + apiResponse.getResults());
                         // *******************************************************************
 
                         return firebaseRealtimeService.saveGeoCache(cacheKey, apiResponse.getResults())
