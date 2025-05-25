@@ -30,7 +30,7 @@ public class WeatherService {
     private final AirQualityService airQualityService;
     private final FirebaseRealtimeService firebaseRealtimeService;
     private final SunriseSunsetService sunriseSunsetService;
-    // private final NeoService neoService; // Eliminado
+    private final ApodService apodService;
 
     private static final long CACHE_EXPIRATION_WEATHER_SECONDS = 600;
 
@@ -38,8 +38,8 @@ public class WeatherService {
                           @Qualifier("yrNoWebClient") WebClient yrNoWebClient,
                           AirQualityService airQualityService,
                           FirebaseRealtimeService firebaseRealtimeService,
-                          SunriseSunsetService sunriseSunsetService
-            /* , NeoService neoService */) { // Eliminado del constructor
+                          SunriseSunsetService sunriseSunsetService,
+            ApodService apodService) { // Eliminado del constructor
         this.metNoWebClient = metNoWebClient.mutate()
                 .filter(logResponse())
                 .build();
@@ -47,7 +47,7 @@ public class WeatherService {
         this.airQualityService = airQualityService;
         this.firebaseRealtimeService = firebaseRealtimeService;
         this.sunriseSunsetService = sunriseSunsetService;
-        // this.neoService = neoService; // Eliminado
+        this.apodService = apodService;
     }
 
     private ExchangeFilterFunction logResponse() {
@@ -88,23 +88,22 @@ public class WeatherService {
         Mono<LocationForecastResponse> metnoForecastMono = getLocationForecastWithCache(lat, lon);
         Mono<AirQuality> airQualityMono = airQualityService.getAirQuality(lat, lon);
         Mono<SunriseSunsetResponse.Results> sunriseSunsetMono = sunriseSunsetService.getSunriseSunsetTimes(lat, lon, today);
-        // Mono<List<NeoFeedResponse.NearEarthObject>> neoMono = neoService.getNearEarthObjects(sevenDaysAgo, today) // Eliminado
-        //         .onErrorResume(e -> {
-        //             System.err.println("!!! [WeatherService] Fallo al obtener NEOs: " + e.getMessage());
-        //             return Mono.just(Collections.emptyList());
-        //         });
 
-        // Combina todos los Monos (ahora solo 3)
+        // ¡NUEVO: Mono para la NASA APOD!
+        Mono<NASAApodInfo> nasaApodInfoMono = apodService.getApodInfo(LocalDate.now());
+
+        // Combina todos los Monos (ahora 4: metno, airQuality, sunriseSunset, apod)
         return Mono.zip(
                         metnoForecastMono,
                         airQualityMono,
-                        sunriseSunsetMono
+                        sunriseSunsetMono,
+                        nasaApodInfoMono // ¡Añadido el Mono de APOD!
                 )
                 .map(tuple -> {
                     LocationForecastResponse forecastResponse = tuple.getT1();
                     AirQuality airQuality = tuple.getT2();
                     SunriseSunsetResponse.Results astronomicalTimes = tuple.getT3();
-                    // List<NeoFeedResponse.NearEarthObject> nearEarthObjects = tuple.getT4(); // Eliminado
+                    NASAApodInfo nasaApodInfo = tuple.getT4(); // ¡Extraído el objeto APOD del tuple!
 
                     InstantWeather instantWeather = getInstantWeatherFromMetNoResponse(forecastResponse);
                     List<HourlyForecast> hourlyForecasts = getHourlyForecastFromMetNoResponse(forecastResponse);
@@ -118,7 +117,7 @@ public class WeatherService {
                             .windMap(windMap)
                             .airQuality(airQuality)
                             .astronomicalTimes(astronomicalTimes)
-                            // .nearEarthObjects(nearEarthObjects) // Eliminado
+                            .nasaApod(nasaApodInfo) // ¡Asignado el objeto APOD!
                             .build();
                 })
                 .doOnError(e -> System.err.println("!!! [WeatherService] Error consolidando datos en getAllWeatherData: " + e.getMessage()));

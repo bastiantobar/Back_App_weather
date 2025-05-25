@@ -35,4 +35,7 @@ public class WeatherResponse {
 
     @Schema(description = "Datos de salida y puesta del sol, y crepúsculos.")
     private SunriseSunsetResponse.Results astronomicalTimes; // <-- ¡NUEVO CAMPO!
+
+    @Schema(description = "Imagen Astronómica del Día de la NASA")
+    private NASAApodInfo nasaApod;
 }

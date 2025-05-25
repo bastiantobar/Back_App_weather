@@ -1,5 +1,6 @@
 package com.back.tfm.weatherapp.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -50,4 +51,14 @@ public class WebClientConfig {
                 .defaultHeader("User-Agent", "MyWeatherApp/1.0 (bastiantobar@example.com)")
                 .build();
     }
+
+    @Bean
+    @Qualifier("nasaApodWebClient") // Nuevo WebClient para NASA APOD
+    public WebClient nasaApodWebClient() {
+        return WebClient.builder()
+                .baseUrl("https://api.nasa.gov") // URL base de NASA APOD
+                .build();
+    }
+
+
 }
