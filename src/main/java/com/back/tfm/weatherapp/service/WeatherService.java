@@ -1,19 +1,13 @@
 package com.back.tfm.weatherapp.service;
 
-import com.back.tfm.weatherapp.dto.AirQuality;
-import com.back.tfm.weatherapp.dto.LocationCoordinates;
-import com.back.tfm.weatherapp.dto.LocationForecastResponse;
-import com.back.tfm.weatherapp.dto.WeatherResponse;
-import com.back.tfm.weatherapp.dto.SunriseSunsetResponse;
-import com.back.tfm.weatherapp.model.*;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.back.tfm.weatherapp.dto.*; // Importa todos los DTOs
+import com.back.tfm.weatherapp.model.*; // Importa todos los modelos de la carpeta
+
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
-import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -36,15 +30,16 @@ public class WeatherService {
     private final AirQualityService airQualityService;
     private final FirebaseRealtimeService firebaseRealtimeService;
     private final SunriseSunsetService sunriseSunsetService;
+    // private final NeoService neoService; // Eliminado
 
     private static final long CACHE_EXPIRATION_WEATHER_SECONDS = 600;
-    private static final long CACHE_EXPIRATION_WINDMAP_SECONDS = 1800;
 
     public WeatherService(@Qualifier("metNoWebClient") WebClient metNoWebClient,
                           @Qualifier("yrNoWebClient") WebClient yrNoWebClient,
                           AirQualityService airQualityService,
                           FirebaseRealtimeService firebaseRealtimeService,
-                          SunriseSunsetService sunriseSunsetService) {
+                          SunriseSunsetService sunriseSunsetService
+            /* , NeoService neoService */) { // Eliminado del constructor
         this.metNoWebClient = metNoWebClient.mutate()
                 .filter(logResponse())
                 .build();
@@ -52,22 +47,19 @@ public class WeatherService {
         this.airQualityService = airQualityService;
         this.firebaseRealtimeService = firebaseRealtimeService;
         this.sunriseSunsetService = sunriseSunsetService;
+        // this.neoService = neoService; // Eliminado
     }
 
     private ExchangeFilterFunction logResponse() {
         return ExchangeFilterFunction.ofResponseProcessor(clientResponse -> {
-            // Loggea el código de estado HTTP
             System.out.println("--- [Met.no API Filter] Status Code: " + clientResponse.statusCode());
-
             if (clientResponse.statusCode().isError()) {
-                // Si es un error, loggea el cuerpo del error
                 return clientResponse.bodyToMono(String.class)
                         .flatMap(errorBody -> {
                             System.err.println("!!! [Met.no API Filter] Error Response Body: " + errorBody);
                             return Mono.just(clientResponse.mutate().body(errorBody).build());
                         });
             } else {
-                // Si es exitoso, loggea el cuerpo completo de la respuesta (truncado)
                 return clientResponse.bodyToMono(String.class)
                         .flatMap(responseBody -> {
                             System.out.println("--- [Met.no API Filter] Full Response Body (first 500 chars): " + responseBody.substring(0, Math.min(responseBody.length(), 500)) + "...");
@@ -77,28 +69,47 @@ public class WeatherService {
         });
     }
 
+    /**
+     * Obtiene todos los datos meteorológicos (pronóstico, calidad del aire, amanecer/atardecer)
+     * y los consolida en un objeto WeatherResponse.
+     * Utiliza caché para los datos de Met.no, calidad del aire y amanecer/atardecer.
+     *
+     * @param lat     Latitud de la ubicación.
+     * @param lon     Longitud de la ubicación.
+     * @param city    Nombre de la ciudad.
+     * @param country Nombre del país.
+     * @return Mono que emite un objeto WeatherResponse consolidado.
+     */
     public Mono<WeatherResponse> getAllWeatherData(double lat, double lon, String city, String country) {
         LocalDate today = LocalDate.now();
+        // LocalDate sevenDaysAgo = today.minusDays(7); // Eliminado
 
+        // Monos para las llamadas a las APIs
+        Mono<LocationForecastResponse> metnoForecastMono = getLocationForecastWithCache(lat, lon);
+        Mono<AirQuality> airQualityMono = airQualityService.getAirQuality(lat, lon);
+        Mono<SunriseSunsetResponse.Results> sunriseSunsetMono = sunriseSunsetService.getSunriseSunsetTimes(lat, lon, today);
+        // Mono<List<NeoFeedResponse.NearEarthObject>> neoMono = neoService.getNearEarthObjects(sevenDaysAgo, today) // Eliminado
+        //         .onErrorResume(e -> {
+        //             System.err.println("!!! [WeatherService] Fallo al obtener NEOs: " + e.getMessage());
+        //             return Mono.just(Collections.emptyList());
+        //         });
+
+        // Combina todos los Monos (ahora solo 3)
         return Mono.zip(
-                        getLocationForecastWithCache(lat, lon),
-                        airQualityService.getAirQuality(lat, lon),
-                        sunriseSunsetService.getSunriseSunsetTimes(lat, lon, today)
+                        metnoForecastMono,
+                        airQualityMono,
+                        sunriseSunsetMono
                 )
                 .map(tuple -> {
                     LocationForecastResponse forecastResponse = tuple.getT1();
                     AirQuality airQuality = tuple.getT2();
                     SunriseSunsetResponse.Results astronomicalTimes = tuple.getT3();
+                    // List<NeoFeedResponse.NearEarthObject> nearEarthObjects = tuple.getT4(); // Eliminado
 
                     InstantWeather instantWeather = getInstantWeatherFromMetNoResponse(forecastResponse);
                     List<HourlyForecast> hourlyForecasts = getHourlyForecastFromMetNoResponse(forecastResponse);
                     LocationCoordinates locationCoordinates = new LocationCoordinates(city, lat, lon, country);
                     WindMap windMap = getWindSpeedMapFromMetNoResponse(forecastResponse, city, country);
-
-                    // Persistir en Firebase (opcional, si aún se requiere para otros fines)
-                    firebaseRealtimeService.saveInstantWeather(instantWeather);
-                    firebaseRealtimeService.saveHourlyForecasts(hourlyForecasts);
-                    // firebaseRealtimeService.saveWindMap(windMap); // Ya no es necesario guardar el WindMap aquí si solo se usa el último punto para la respuesta
 
                     return WeatherResponse.builder()
                             .location(locationCoordinates)
@@ -107,14 +118,19 @@ public class WeatherService {
                             .windMap(windMap)
                             .airQuality(airQuality)
                             .astronomicalTimes(astronomicalTimes)
+                            // .nearEarthObjects(nearEarthObjects) // Eliminado
                             .build();
-                });
+                })
+                .doOnError(e -> System.err.println("!!! [WeatherService] Error consolidando datos en getAllWeatherData: " + e.getMessage()));
     }
 
-    // =========================================================================
-    // Métodos de parseo y lógica de negocio
-    // =========================================================================
-
+    /**
+     * Obtiene el pronóstico de Met.no, utilizando caché de Firebase.
+     *
+     * @param lat Latitud.
+     * @param lon Longitud.
+     * @return Mono que emite LocationForecastResponse.
+     */
     private Mono<LocationForecastResponse> getLocationForecastWithCache(double lat, double lon) {
         String cacheKey = String.format(Locale.US, "metno_forecast_%.4f_%.4f", lat, lon)
                 .replace(".", "_").replace("-", "minus");
@@ -123,11 +139,11 @@ public class WeatherService {
 
         return firebaseRealtimeService.getGeoCache(cacheKey, LocationForecastResponse.class)
                 .flatMap(cachedResponse -> {
-                    if (cachedResponse != null && cachedResponse.getProperties() != null) {
-                        JsonNode meta = cachedResponse.getProperties().get("meta"); // Acceso correcto
-                        if (meta != null && meta.get("updated_at") != null) { // Acceso correcto
+                    if (cachedResponse != null && cachedResponse.getProperties() != null && cachedResponse.getProperties().getMeta() != null) {
+                        LocationForecastMeta meta = cachedResponse.getProperties().getMeta();
+                        if (meta.getUpdated_at() != null) {
                             try {
-                                Instant cachedTime = Instant.parse(meta.get("updated_at").asText()); // Acceso correcto
+                                Instant cachedTime = Instant.parse(meta.getUpdated_at());
                                 Instant now = Instant.now();
                                 if (ChronoUnit.SECONDS.between(cachedTime, now) < CACHE_EXPIRATION_WEATHER_SECONDS) {
                                     System.out.println("<<< [WeatherService] Sirviendo Met.no response desde caché para " + lat + ", " + lon + ".");
@@ -164,9 +180,14 @@ public class WeatherService {
                 })
                 .bodyToMono(LocationForecastResponse.class)
                 .flatMap(apiResponse -> {
-                    System.out.println("--- [WeatherService] Met.no Locationforecast API raw response recibida y deserializada a LocationForecastResponse.");
-                    return firebaseRealtimeService.saveGeoCache(cacheKey, apiResponse)
-                            .thenReturn(apiResponse);
+                    if (apiResponse != null && apiResponse.getProperties() != null && apiResponse.getProperties().getTimeseries() != null && !apiResponse.getProperties().getTimeseries().isEmpty()) {
+                        System.out.println("--- [WeatherService] Met.no Locationforecast API raw response recibida y deserializada a LocationForecastResponse.");
+                        return firebaseRealtimeService.saveGeoCache(cacheKey, apiResponse)
+                                .thenReturn(apiResponse);
+                    } else {
+                        System.err.println("!!! [WeatherService] Respuesta vacía o nula de Met.no API.");
+                        return Mono.error(new RuntimeException("API de Met.no devolvió respuesta vacía o nula."));
+                    }
                 })
                 .doOnError(e -> {
                     System.err.println("!!! [WeatherService] Error en la llamada a Met.no Locationforecast API o en el parseo: " + e.getMessage());
@@ -174,68 +195,73 @@ public class WeatherService {
                 });
     }
 
+    /**
+     * Extrae el InstantWeather del LocationForecastResponse.
+     *
+     * @param response La respuesta completa de Met.no.
+     * @return InstantWeather.
+     */
     private InstantWeather getInstantWeatherFromMetNoResponse(LocationForecastResponse response) {
-        if (response == null || response.getProperties() == null || !response.getProperties().has("timeseries")) {
+        if (response == null || response.getProperties() == null || response.getProperties().getTimeseries() == null || response.getProperties().getTimeseries().isEmpty()) {
             System.err.println("!!! [WeatherService] (InstantWeather) Respuesta de Met.no inválida o incompleta. Retornando vacío.");
             return new InstantWeather();
         }
-        JsonNode timeseries = response.getProperties().get("timeseries"); // Acceso correcto
-        if (timeseries == null || !timeseries.isArray() || timeseries.isEmpty()) {
-            System.err.println("!!! [WeatherService] (InstantWeather) Timeseries no es un array o está vacío. Retornando vacío.");
-            return new InstantWeather();
-        }
 
-        JsonNode firstEntry = timeseries.get(0); // Acceso correcto
-        JsonNode data = firstEntry.get("data"); // Acceso correcto
-        JsonNode instant = data.get("instant"); // Acceso correcto
-        JsonNode details = instant.get("details"); // Acceso correcto
+        TimeseriesData firstEntry = response.getProperties().getTimeseries().get(0);
+        LocationForecastData data = firstEntry.getData();
+        InstantData instant = data.getInstant();
+        InstantDetails details = instant.getDetails();
 
-        if (details == null || details.isMissingNode()) {
+        if (details == null) {
             System.err.println("!!! [WeatherService] (InstantWeather) No se encontraron detalles instantáneos en la ruta. Retornando vacío.");
             return new InstantWeather();
         }
 
-        double airTemperature = Optional.ofNullable(details.get("air_temperature")).map(JsonNode::asDouble).orElse(0.0);
-        double relativeHumidity = Optional.ofNullable(details.get("relative_humidity")).map(JsonNode::asDouble).orElse(0.0);
-        double airPressureAtSeaLevel = Optional.ofNullable(details.get("air_pressure_at_sea_level")).map(JsonNode::asDouble).orElse(0.0);
-        double windSpeed = Optional.ofNullable(details.get("wind_speed")).map(JsonNode::asDouble).orElse(0.0);
-        double cloudAreaFraction = Optional.ofNullable(details.get("cloud_area_fraction")).map(JsonNode::asDouble).orElse(0.0);
-
-        return new InstantWeather(airTemperature, relativeHumidity, airPressureAtSeaLevel, windSpeed, cloudAreaFraction);
+        return InstantWeather.builder()
+                .airTemperature(Optional.ofNullable(details.getAir_temperature()).orElse(0.0))
+                .relativeHumidity(Optional.ofNullable(details.getRelative_humidity()).orElse(0.0))
+                .airPressureAtSeaLevel(Optional.ofNullable(details.getAir_pressure_at_sea_level()).orElse(0.0))
+                .windSpeed(Optional.ofNullable(details.getWind_speed()).orElse(0.0))
+                .cloudAreaFraction(Optional.ofNullable(details.getCloud_area_fraction()).orElse(0.0))
+                .build();
     }
 
+    /**
+     * Extrae la lista de HourlyForecasts del LocationForecastResponse.
+     *
+     * @param response La respuesta completa de Met.no.
+     * @return Lista de HourlyForecast.
+     */
     private List<HourlyForecast> getHourlyForecastFromMetNoResponse(LocationForecastResponse response) {
         List<HourlyForecast> hourlyForecasts = new ArrayList<>();
-        if (response == null || response.getProperties() == null || !response.getProperties().has("timeseries")) {
+        if (response == null || response.getProperties() == null || response.getProperties().getTimeseries() == null || response.getProperties().getTimeseries().isEmpty()) {
             System.err.println("!!! [WeatherService] (HourlyForecast) Respuesta de Met.no inválida o incompleta. Retornando lista vacía.");
             return Collections.emptyList();
         }
-        JsonNode timeseries = response.getProperties().get("timeseries"); // Acceso correcto
 
-        if (timeseries != null && timeseries.isArray()) {
-            int limit = Math.min(timeseries.size(), 24);
-            for (int i = 0; i < limit; i++) {
-                JsonNode hourData = timeseries.get(i); // Acceso correcto
-                String time = hourData.get("time").asText(); // Acceso correcto
-                JsonNode data = hourData.get("data"); // Acceso correcto
-                JsonNode instantDetails = data.get("instant").get("details"); // Acceso correcto
+        List<TimeseriesData> timeseries = response.getProperties().getTimeseries();
+        int limit = Math.min(timeseries.size(), 24);
 
-                JsonNode next1HoursDetails = data.has("next_1_hours") ? data.get("next_1_hours").get("details") : null;
-                JsonNode next6HoursDetails = data.has("next_6_hours") ? data.get("next_6_hours").get("details") : null;
+        for (int i = 0; i < limit; i++) {
+            TimeseriesData hourData = timeseries.get(i);
+            String time = hourData.getTime();
+            LocationForecastData data = hourData.getData();
+            InstantDetails instantDetails = data.getInstant() != null ? data.getInstant().getDetails() : null;
 
+            NextHoursData next1Hours = data.getNext1Hours();
+            NextHoursData next6Hours = data.getNext6Hours();
 
-                double airTemperature = Optional.ofNullable(instantDetails.get("air_temperature")).map(JsonNode::asDouble).orElse(0.0);
-                double windSpeed = Optional.ofNullable(instantDetails.get("wind_speed")).map(JsonNode::asDouble).orElse(0.0);
-                double precipitationAmount = 0.0;
+            double airTemperature = (instantDetails != null && instantDetails.getAir_temperature() != null) ? instantDetails.getAir_temperature() : 0.0;
+            double windSpeed = (instantDetails != null && instantDetails.getWind_speed() != null) ? instantDetails.getWind_speed() : 0.0;
+            double precipitationAmount = 0.0;
 
-                if (next1HoursDetails != null && next1HoursDetails.has("precipitation_amount")) {
-                    precipitationAmount = next1HoursDetails.get("precipitation_amount").asDouble(0.0);
-                } else if (next6HoursDetails != null && next6HoursDetails.has("precipitation_amount")) {
-                    precipitationAmount = next6HoursDetails.get("precipitation_amount").asDouble(0.0) / 6.0; // Simplificación
-                }
-
-                hourlyForecasts.add(new HourlyForecast(time, airTemperature, windSpeed, precipitationAmount));
+            if (next1Hours != null && next1Hours.getDetails() != null && next1Hours.getDetails().getPrecipitation_amount() != null) {
+                precipitationAmount = next1Hours.getDetails().getPrecipitation_amount();
+            } else if (next6Hours != null && next6Hours.getDetails() != null && next6Hours.getDetails().getPrecipitation_amount() != null) {
+                precipitationAmount = next6Hours.getDetails().getPrecipitation_amount() / 6.0;
             }
+
+            hourlyForecasts.add(new HourlyForecast(time, airTemperature, windSpeed, precipitationAmount));
         }
         return hourlyForecasts;
     }
@@ -243,46 +269,43 @@ public class WeatherService {
     public WindMap getWindSpeedMapFromMetNoResponse(LocationForecastResponse response, String city, String country) {
         List<WindMapPoint> features = new ArrayList<>();
 
-        if (response == null || response.getProperties() == null || !response.getProperties().has("timeseries")) {
+        if (response == null || response.getProperties() == null || response.getProperties().getTimeseries() == null || response.getProperties().getTimeseries().isEmpty()) {
             System.err.println("!!! [WeatherService] (WindMap) Respuesta de Met.no inválida o incompleta. Retornando vacío.");
             return new WindMap();
         }
-        JsonNode timeseries = response.getProperties().get("timeseries"); // Acceso correcto
 
-        if (timeseries != null && timeseries.isArray()) {
-            JsonNode geometryNode = response.getGeometry(); // Acceso correcto
-            double latitude = 0.0;
-            double longitude = 0.0;
-            if (geometryNode != null && geometryNode.has("coordinates") && geometryNode.get("coordinates").isArray()) {
-                longitude = geometryNode.get("coordinates").get(0).asDouble(); // Acceso correcto
-                latitude = geometryNode.get("coordinates").get(1).asDouble(); // Acceso correcto
-            }
+        List<TimeseriesData> timeseries = response.getProperties().getTimeseries();
+        LocationForecastGeometry geometryDto = response.getGeometry();
 
-            // Iterar sobre todos los elementos para extraer posibles puntos de viento
-            for (JsonNode timesery : timeseries) { // Acceso correcto
-                try {
-                    String time = timesery.get("time").asText(); // Acceso correcto
-                    JsonNode data = timesery.get("data"); // Acceso correcto
-                    JsonNode instantDetails = data.get("instant").get("details"); // Acceso correcto
-
-                    double windSpeed = Optional.ofNullable(instantDetails.get("wind_speed")).map(JsonNode::asDouble).orElse(0.0);
-                    double windFromDirection = Optional.ofNullable(instantDetails.get("wind_from_direction")).map(JsonNode::asDouble).orElse(0.0);
-
-                    Geometry geometry = new Geometry("Point", List.of(longitude, latitude));
-                    Properties properties = new Properties(windSpeed, windFromDirection, time);
-                    features.add(new WindMapPoint(geometry, properties, "Feature"));
-
-                } catch (DateTimeParseException e) {
-                    System.err.println("!!! [WeatherService] Error parseando fecha en WindMap: " + timesery.get("time").asText() + " - " + e.getMessage());
-                } catch (Exception e) {
-                    System.err.println("!!! [WeatherService] Error procesando timesery para WindMap: " + e.getMessage());
-                }
-            }
+        double latitude = 0.0;
+        double longitude = 0.0;
+        if (geometryDto != null && geometryDto.getCoordinates() != null && geometryDto.getCoordinates().size() >= 2) {
+            longitude = geometryDto.getCoordinates().get(0);
+            latitude = geometryDto.getCoordinates().get(1);
         } else {
-            System.err.println("!!! [WeatherService] (WindMap) /timeseries no es un array o está nulo.");
+            System.err.println("!!! [WeatherService] (WindMap) Coordenadas de geometría no disponibles. Usando 0,0.");
         }
 
-        // Encuentra el WindMapPoint con el 'time' más reciente (mayor Instant)
+        for (TimeseriesData timesery : timeseries) {
+            try {
+                String time = timesery.getTime();
+                LocationForecastData data = timesery.getData();
+                InstantDetails instantDetails = data.getInstant() != null ? data.getInstant().getDetails() : null;
+
+                if (instantDetails != null) {
+                    double windSpeed = Optional.ofNullable(instantDetails.getWind_speed()).orElse(0.0);
+                    double windFromDirection = Optional.ofNullable(instantDetails.getWind_from_direction()).orElse(0.0);
+
+                    com.back.tfm.weatherapp.model.Geometry geometry = new com.back.tfm.weatherapp.model.Geometry("Point", List.of(longitude, latitude));
+                    com.back.tfm.weatherapp.model.Properties properties = new com.back.tfm.weatherapp.model.Properties(windSpeed, windFromDirection, time);
+                    features.add(new WindMapPoint(geometry, properties, "Feature"));
+                }
+
+            } catch (Exception e) {
+                System.err.println("!!! [WeatherService] Error procesando timesery para WindMap: " + e.getMessage());
+            }
+        }
+
         Optional<WindMapPoint> latestFeatureOptional = features.stream()
                 .max(Comparator.comparing(f -> Instant.parse(f.getProperties().getTime())));
 
@@ -298,11 +321,6 @@ public class WeatherService {
             return new WindMap();
         }
     }
-
-
-    // =========================================================================
-    // MÉTODOS EXISTENTES QUE SE PUEDEN MANTENER SI AÚN SE USAN DIRECTAMENTE
-    // =========================================================================
 
     public Mono<byte[]> getMeteogramAsBytes() {
         String path = "en/content/2-3117735/meteogram.svg?mode=dark";

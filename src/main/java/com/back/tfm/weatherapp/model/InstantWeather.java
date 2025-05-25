@@ -1,14 +1,15 @@
 package com.back.tfm.weatherapp.model;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
+import lombok.Builder; // <-- ¡Añade esta importación!
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder // <-- ¡Añade esta anotación!
 @Schema(description = "Detalles de los datos instantáneos")
-
 public class InstantWeather {
     private double airTemperature;
     private double relativeHumidity;

@@ -1,7 +1,6 @@
 // src/main/java/com/back/tfm/weatherapp/dto/LocationForecastResponse.java
 package com.back.tfm.weatherapp.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,9 +17,11 @@ public class LocationForecastResponse {
     @Schema(description = "Tipo de objeto GeoJSON", example = "FeatureCollection")
     private String type;
 
-    @Schema(description = "Objeto GeoJSON de geometría", example = "{\"type\": \"Point\", \"coordinates\": [-3.7038, 40.4168, 100.0]}")
-    private JsonNode geometry; // Capturará la sección "geometry" como un JsonNode
+    // ¡IMPORTANTE! Cambiamos JsonNode por el DTO fuertemente tipado
+    @Schema(description = "Objeto GeoJSON de geometría")
+    private LocationForecastGeometry geometry;
 
-    @Schema(description = "Objeto de propiedades, contiene metadatos y series de tiempo de datos", example = "{\"meta\": {...}, \"timeseries\": [...]}")
-    private JsonNode properties; // Capturará la sección "properties" como un JsonNode, que contiene "timeseries"
+    // ¡IMPORTANTE! Cambiamos JsonNode por el DTO fuertemente tipado
+    @Schema(description = "Objeto de propiedades, contiene metadatos y series de tiempo de datos")
+    private LocationForecastProperties properties;
 }

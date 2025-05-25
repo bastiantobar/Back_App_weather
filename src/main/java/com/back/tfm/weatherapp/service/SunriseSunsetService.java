@@ -68,7 +68,11 @@ public class SunriseSunsetService {
                 .flatMap(apiResponse -> {
                     if ("OK".equalsIgnoreCase(apiResponse.getStatus()) && apiResponse.getResults() != null) {
                         System.out.println("--- [SunriseSunsetService] Sunrise-Sunset API response recibida y deserializada.");
-                        // Guarda solo el objeto `Results` en la caché, no la respuesta completa
+
+                        // *** AÑADE ESTA LÍNEA PARA VERIFICAR EL OBJETO COMPLETO ANTES DE CACHE ***
+                        System.out.println("--- [SunriseSunsetService] Objeto Results a guardar en caché: " + apiResponse.getResults());
+                        // *******************************************************************
+
                         return firebaseRealtimeService.saveGeoCache(cacheKey, apiResponse.getResults())
                                 .thenReturn(apiResponse.getResults());
                     } else {
