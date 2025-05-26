@@ -165,28 +165,30 @@ public class WeatherController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class)))
     })
-    @GetMapping("/full-report") // <-- Corregido: Vuelve a ser /full-report
-    public Mono<ResponseEntity<com.back.tfm.weatherapp.dto.WeatherResponse>> getFullWeatherReport( // <-- Corregido: Nombre del método
-                                                                                                   @Parameter(description = "Nombre de la ciudad", required = true, example = "Santiago") @RequestParam String city,
-                                                                                                   @Parameter(description = "Nombre del país", required = true, example = "Chile") @RequestParam String country) {
+    // Método para obtener el reporte meteorológico completo por una cadena de dirección
+    @GetMapping("/full-report")
+    public Mono<ResponseEntity<WeatherResponse>> getFullWeatherReport(
+            @Parameter(description = "Cadena de búsqueda de la dirección (ej. 'Calle Falsa 123, Springfield, USA' o 'Hijuelas, Valparaiso, Chile')", required = true, example = "Hijuelas, Valparaiso, Chile")
+            @RequestParam String addressQuery) {
 
-        System.out.println("--- [Controller] Recibida solicitud /full-report para ciudad: " + city + ", país: " + country + " ---");
+        System.out.println("--- [Controller] Recibida solicitud /full-report para dirección: " + addressQuery + " ---");
 
-        if (city == null || city.trim().isEmpty() || country == null || country.trim().isEmpty()) {
-            System.err.println("!!! [Controller] Error 400: Ciudad o país no pueden ser vacíos.");
-            return Mono.just(ResponseEntity.badRequest().<com.back.tfm.weatherapp.dto.WeatherResponse>build()); // Asegura el tipo
+        if (addressQuery == null || addressQuery.trim().isEmpty()) {
+            System.err.println("!!! [Controller] Error 400: La cadena de dirección no puede ser vacía.");
+            return Mono.just(ResponseEntity.badRequest().<WeatherResponse>build());
         }
 
         System.out.println(">>> [Controller] Llamando a GeocodingService.getCoordinates para obtener lat/lon...");
-        return geocodingService.getCoordinates(city, country)
+        // Pasar la cadena de dirección completa al servicio de geocodificación
+        return geocodingService.getCoordinates(addressQuery) // ¡CAMBIO: Solo se pasa addressQuery!
                 .flatMap(coords -> {
-                    System.out.println("<<< [Controller] Coordenadas obtenidas: " + coords.getLatitude() + ", " + coords.getLongitude());
+                    System.out.println("<<< [Controller] Coordenadas obtenidas: " + coords.getLatitude() + ", " + coords.getLongitude() + " para " + coords.getName());
                     System.out.println(">>> [Controller] Llamando a WeatherService.getAllWeatherData...");
                     return weatherService.getAllWeatherData(
                                     coords.getLatitude(),
                                     coords.getLongitude(),
-                                    city,
-                                    country
+                                    coords.getName(), // Usar el nombre de la ubicación devuelto por Nominatim
+                                    coords.getCountryCode() // Usar el código de país devuelto por Nominatim
                             )
                             .map(weatherResponse -> {
                                 System.out.println("<<< [Controller] WeatherService.getAllWeatherData completado exitosamente.");
@@ -195,17 +197,17 @@ public class WeatherController {
                             .onErrorResume(e -> {
                                 System.err.println("!!! [Controller] Error en WeatherService.getAllWeatherData: " + e.getMessage());
                                 e.printStackTrace();
-                                return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                                return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<WeatherResponse>build());
                             });
                 })
                 .onErrorResume(IllegalArgumentException.class, e -> {
                     System.err.println("!!! [Controller] Error 400: Ubicación no encontrada por GeocodingService. Mensaje: " + e.getMessage());
-                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).<WeatherResponse>build());
                 })
                 .onErrorResume(e -> {
                     System.err.println("!!! [Controller] Error 500: Fallo inesperado en /full-report. Mensaje: " + e.getMessage());
                     e.printStackTrace();
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<com.back.tfm.weatherapp.dto.WeatherResponse>build());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<WeatherResponse>build());
                 })
                 .doFinally(signalType -> {
                     System.out.println("--- [Controller] Solicitud /full-report finalizada con estado: " + signalType + " ---");
@@ -246,32 +248,33 @@ public class WeatherController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = com.back.tfm.weatherapp.model.ErrorResponse.class)))
     })
+    // Adaptar el endpoint /location también para que use la cadena de búsqueda única
     @GetMapping("/location")
     public Mono<ResponseEntity<LocationCoordinates>> getLocation(
-            @Parameter(description = "Nombre de la ciudad", required = true, example = "Santiago") @RequestParam String city,
-            @Parameter(description = "Nombre del país", required = true, example = "Chile") @RequestParam String country) {
+            @Parameter(description = "Cadena de búsqueda de la dirección (ej. 'Santiago, Chile')", required = true, example = "Santiago, Chile")
+            @RequestParam String addressQuery) {
 
-        System.out.println("--- [Controller] Recibida solicitud /location para ciudad: " + city + ", país: " + country + " ---");
+        System.out.println("--- [Controller] Recibida solicitud /location para dirección: " + addressQuery + " ---");
 
-        if (city == null || city.trim().isEmpty() || country == null || country.trim().isEmpty()) {
-            System.err.println("!!! [Controller] Error 400: Ciudad o país no pueden ser vacíos.");
-            return Mono.just(ResponseEntity.badRequest().build());
+        if (addressQuery == null || addressQuery.trim().isEmpty()) {
+            System.err.println("!!! [Controller] Error 400: La cadena de dirección no puede ser vacía.");
+            return Mono.just(ResponseEntity.badRequest().<LocationCoordinates>build());
         }
 
         System.out.println(">>> [Controller] Llamando a GeocodingService.getCoordinates...");
-        return geocodingService.getCoordinates(city, country)
+        return geocodingService.getCoordinates(addressQuery) // ¡CAMBIO: Solo se pasa addressQuery!
                 .map(coords -> {
                     System.out.println("<<< [Controller] GeocodingService completado exitosamente. Coordenadas obtenidas: " + coords);
                     return ResponseEntity.ok(coords);
                 })
                 .onErrorResume(IllegalArgumentException.class, e -> {
                     System.err.println("<<< [Controller] Error 400: Ubicación no encontrada por GeocodingService. Mensaje: " + e.getMessage());
-                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).build());
+                    return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).<LocationCoordinates>build());
                 })
                 .onErrorResume(e -> {
                     System.err.println("<<< [Controller] Error 500: Fallo inesperado en /location. Mensaje: " + e.getMessage());
                     e.printStackTrace();
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<LocationCoordinates>build());
                 })
                 .doFinally(signalType -> {
                     System.out.println("--- [Controller] Solicitud /location finalizada con estado: " + signalType + " ---");
