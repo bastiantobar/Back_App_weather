@@ -1,4 +1,3 @@
-// src/main/java/com/back/tfm/weatherapp/service/ApodService.java
 package com.back.tfm.weatherapp.service;
 
 import com.back.tfm.weatherapp.dto.NASAApodInfo;
@@ -18,14 +17,18 @@ import java.util.Optional;
 public class ApodService {
 
     private final WebClient nasaApodWebClient;
-    @Value("${nasa.apod.api.key}") // Asegúrate de añadir esta propiedad en application.properties
+    private final TranslationService translationService; // Inyectar el nuevo servicio de traducción
+
+    @Value("${nasa.apod.api.key}")
     private String nasaApodApiKey;
 
-    // Formateador para la fecha de la API (YYYY-MM-DD)
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    public ApodService(@Qualifier("nasaApodWebClient") WebClient nasaApodWebClient) {
+    // Constructor actualizado para inyectar TranslationService
+    public ApodService(@Qualifier("nasaApodWebClient") WebClient nasaApodWebClient,
+                       TranslationService translationService) {
         this.nasaApodWebClient = nasaApodWebClient;
+        this.translationService = translationService;
     }
 
     public Mono<NASAApodInfo> getApodInfo(LocalDate date) {
@@ -38,17 +41,28 @@ public class ApodService {
                 .bodyToMono(NASAApodResponse.class)
                 .map(response -> {
                     System.out.println("--- [ApodService] NASA APOD API response recibida y deserializada para la fecha: " + formattedDate);
+
+                    // --- Lógica de Traducción para la explicación ---
+                    String originalExplanation = response.getExplanation();
+                    String translatedExplanation = originalExplanation; // Por defecto, el original
+
+                    if (originalExplanation != null && !originalExplanation.trim().isEmpty()) {
+                        // Asumimos que la explicación original de la NASA está en inglés ("en")
+                        translatedExplanation = translationService.translateText(originalExplanation, "en", "es");
+                    }
+                    // ------------------------------------------------
+
                     return NASAApodInfo.builder()
                             .title(response.getTitle())
-                            .explanation(response.getExplanation())
+                            .explanation(translatedExplanation) // Usar la explicación traducida
                             .url(response.getUrl())
-                            .thumbnailUrl(Optional.ofNullable(response.getThumbnailUrl()).orElse(null)) // Puede ser nulo para imágenes
-                            .copyright(Optional.ofNullable(response.getCopyright()).orElse("NASA")) // Proporciona un valor por defecto si es nulo
+                            .thumbnailUrl(Optional.ofNullable(response.getThumbnailUrl()).orElse(null))
+                            .copyright(Optional.ofNullable(response.getCopyright()).orElse("NASA"))
                             .mediaType(response.getMediaType())
                             .date(response.getDate())
                             .build();
                 })
                 .doOnError(e -> System.err.println("!!! [ApodService] Error en la llamada a NASA APOD API para la fecha " + formattedDate + ": " + e.getMessage()))
-                .onErrorResume(e -> Mono.just(new NASAApodInfo())); // Retorna un objeto vacío en caso de error
+                .onErrorResume(e -> Mono.just(new NASAApodInfo()));
     }
 }

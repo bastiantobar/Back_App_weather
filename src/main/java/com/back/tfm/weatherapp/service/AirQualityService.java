@@ -47,7 +47,8 @@ public class AirQualityService {
                             return Mono.empty();
                         }
                     } else {
-                        System.out.println("--- [AirQualityService] flatMap: Cache miss o datos de calidad del aire inválidos. Pasando a switchIfEmpty.");
+                        System.out.println("--- [" +
+                                "AirQualityService] flatMap: Cache miss o datos de calidad del aire inválidos. Pasando a switchIfEmpty.");
                         return Mono.empty();
                     }
                 })
