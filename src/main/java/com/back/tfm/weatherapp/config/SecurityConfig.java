@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable) // Deshabilitar CSRF para APIs REST
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Habilitar CORS
                 .authorizeExchange(exchange -> exchange
-                        .pathMatchers("/auth/register", "/auth/login", "/weather/location**", "/weather/full-report**").permitAll() // Endpoints públicos
+                        .pathMatchers("/auth/register", "/auth/login").permitAll() // Endpoints públicos
                         .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll() // Swagger público
                         .pathMatchers("/weather/**","/api/**","/auth/update-fcm-token").authenticated() // Endpoints protegidos
                         .anyExchange().denyAll() // Bloquear cualquier otro endpoint no especificado
