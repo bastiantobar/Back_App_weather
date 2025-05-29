@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -82,47 +83,88 @@ public class WeatherService {
      */
     public Mono<WeatherResponse> getAllWeatherData(double lat, double lon, String city, String country) {
         LocalDate today = LocalDate.now();
-        // LocalDate sevenDaysAgo = today.minusDays(7); // Eliminado
 
         // Monos para las llamadas a las APIs
         Mono<LocationForecastResponse> metnoForecastMono = getLocationForecastWithCache(lat, lon);
         Mono<AirQuality> airQualityMono = airQualityService.getAirQuality(lat, lon);
         Mono<SunriseSunsetResponse.Results> sunriseSunsetMono = sunriseSunsetService.getSunriseSunsetTimes(lat, lon, today);
 
-        // ¡NUEVO: Mono para la NASA APOD!
+        // Mono para la NASA APOD
         Mono<NASAApodInfo> nasaApodInfoMono = apodService.getApodInfo(LocalDate.now());
 
-        // Combina todos los Monos (ahora 4: metno, airQuality, sunriseSunset, apod)
+        // Combina todos los Monos
         return Mono.zip(
                         metnoForecastMono,
                         airQualityMono,
                         sunriseSunsetMono,
-                        nasaApodInfoMono // ¡Añadido el Mono de APOD!
+                        nasaApodInfoMono
                 )
                 .map(tuple -> {
                     LocationForecastResponse forecastResponse = tuple.getT1();
                     AirQuality airQuality = tuple.getT2();
                     SunriseSunsetResponse.Results astronomicalTimes = tuple.getT3();
-                    NASAApodInfo nasaApodInfo = tuple.getT4(); // ¡Extraído el objeto APOD del tuple!
+                    NASAApodInfo nasaApodInfo = tuple.getT4();
 
                     InstantWeather instantWeather = getInstantWeatherFromMetNoResponse(forecastResponse);
                     List<HourlyForecast> hourlyForecasts = getHourlyForecastFromMetNoResponse(forecastResponse);
                     LocationCoordinates locationCoordinates = new LocationCoordinates(city, lat, lon, country);
                     WindMap windMap = getWindSpeedMapFromMetNoResponse(forecastResponse, city, country);
 
-                    return WeatherResponse.builder()
+                    WeatherResponse weatherResponse = WeatherResponse.builder()
                             .location(locationCoordinates)
                             .currentWeather(instantWeather)
                             .hourlyForecasts(hourlyForecasts)
                             .windMap(windMap)
                             .airQuality(airQuality)
                             .astronomicalTimes(astronomicalTimes)
-                            .nasaApod(nasaApodInfo) // ¡Asignado el objeto APOD!
+                            .nasaApod(nasaApodInfo)
                             .build();
+
+                    // *** Lógica para guardar el registro histórico de forma automática y condicional ***
+                    Instant now = Instant.now();
+                    final long CACHE_DURATION_MINUTES = 60; // Definir el intervalo de guardado (ej. cada 60 minutos)
+
+                    // No bloqueamos el hilo principal de la respuesta.
+                    // Ejecutamos la lógica de guardado en un hilo aparte.
+                    firebaseRealtimeService.getHistoricalWeatherEntries(lat, lon, 1) // Obtener el registro más reciente
+                            .subscribeOn(Schedulers.boundedElastic()) // Ejecutar en un pool de hilos el blocking I/O
+                            .subscribe(latestEntries -> {
+                                boolean shouldSave = true;
+                                if (!latestEntries.isEmpty()) {
+                                    HistoricalWeatherEntry lastEntry = latestEntries.get(0); // El más reciente (después de invertir la lista en service)
+                                    if (lastEntry.getRecordedAt() != null &&
+                                            lastEntry.getRecordedAt().plus(CACHE_DURATION_MINUTES, ChronoUnit.MINUTES).isAfter(now)) {
+                                        shouldSave = false; // Ya hay un registro reciente, no guardar
+                                        System.out.println("--- [WeatherService] Registro histórico reciente encontrado para " + lat + "," + lon + ". No se guardará uno nuevo.");
+                                    }
+                                }
+
+
+                                if (shouldSave) {
+                                    HistoricalWeatherEntry historicalEntry = new HistoricalWeatherEntry();
+                                    historicalEntry.setLocation(locationCoordinates);
+                                    historicalEntry.setRecordedAt(now); // Esta es la línea importante
+                                    historicalEntry.setInstantWeatherSnapshot(instantWeather);
+                                    historicalEntry.setHourlyForecasts(hourlyForecasts);
+                                    historicalEntry.setAirQualitySnapshot(airQuality);
+
+                                    // *** AÑADE ESTE LOG ***
+                                    System.out.println("--- [WeatherService] Intentando guardar HistoricalEntry. recordedAt: " + historicalEntry.getRecordedAt());
+
+                                    firebaseRealtimeService.saveHistoricalWeatherEntry(historicalEntry)
+                                            .subscribeOn(Schedulers.boundedElastic())
+                                            .subscribe(
+                                                    id -> System.out.println("--- [WeatherService] Registro histórico guardado automáticamente con ID: " + id + " para " + lat + "," + lon),
+                                                    error -> System.err.println("!!! [WeatherService] Error al guardar registro histórico automáticamente para " + lat + "," + lon + ": " + error.getMessage())
+                                            );
+                                }
+                            }, error -> System.err.println("!!! [WeatherService] Error al verificar registros históricos para guardado automático: " + error.getMessage()));
+
+
+                    return weatherResponse; // Devuelve la respuesta meteorológica inmediatamente
                 })
                 .doOnError(e -> System.err.println("!!! [WeatherService] Error consolidando datos en getAllWeatherData: " + e.getMessage()));
     }
-
     /**
      * Obtiene el pronóstico de Met.no, utilizando caché de Firebase.
      *

@@ -3,10 +3,7 @@ package com.back.tfm.weatherapp.controller;
 
 import com.back.tfm.weatherapp.dto.LocationCoordinates;
 import com.back.tfm.weatherapp.dto.WeatherResponse; // Importa tu DTO de respuesta consolidada
-import com.back.tfm.weatherapp.model.ErrorResponse; // Importa tu modelo de respuesta de error
-import com.back.tfm.weatherapp.model.HourlyForecast;
-import com.back.tfm.weatherapp.model.InstantWeather;
-import com.back.tfm.weatherapp.model.WindMap;
+import com.back.tfm.weatherapp.model.*;
 import com.back.tfm.weatherapp.service.FirebaseRealtimeService;
 import com.back.tfm.weatherapp.service.GeocodingService;
 import com.back.tfm.weatherapp.service.WeatherService;
@@ -21,12 +18,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -278,6 +273,87 @@ public class WeatherController {
                 })
                 .doFinally(signalType -> {
                     System.out.println("--- [Controller] Solicitud /location finalizada con estado: " + signalType + " ---");
+                });
+    }
+    @Operation(summary = "Guarda manualmente un registro histórico de datos meteorológicos.",
+            description = "Este endpoint es para guardar una entrada histórica específica. En un sistema real, esto podría ser automático.",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Objeto HistoricalWeatherEntry a guardar",
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = HistoricalWeatherEntry.class)
+                    )
+            ))
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Registro histórico guardado exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = String.class),
+                            examples = @ExampleObject(value = "\"Registro histórico con ID: -NsAcX_Y6Z-yE9fC0aBc guardado exitosamente.\""))),
+            @ApiResponse(responseCode = "400", description = "Solicitud inválida (ej. datos faltantes)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor al guardar",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PostMapping("/historical/save")
+    public Mono<ResponseEntity<String>> saveHistoricalData(@RequestBody HistoricalWeatherEntry historicalEntry) {
+        if (historicalEntry == null || historicalEntry.getLocation() == null || historicalEntry.getRecordedAt() == null) {
+            return Mono.just(ResponseEntity.badRequest().body("Datos de registro histórico incompletos. Se requiere Location y RecordedAt."));
+        }
+        System.out.println(">>> [Controller] Solicitud para guardar registro histórico para lat: " + historicalEntry.getLocation().getLatitude() + ", lon: " + historicalEntry.getLocation().getLongitude());
+
+        // Asegurarse de que el recordedAt esté presente, si no, usar el momento actual
+        if (historicalEntry.getRecordedAt() == null) {
+            historicalEntry.setRecordedAt(Instant.now());
+        }
+
+        return firebaseRealtimeService.saveHistoricalWeatherEntry(historicalEntry)
+                .map(id -> {
+                    System.out.println("<<< [Controller] Registro histórico guardado con ID: " + id);
+                    return ResponseEntity.status(HttpStatus.CREATED).body("Registro histórico con ID: " + id + " guardado exitosamente.");
+                })
+                .onErrorResume(e -> {
+                    System.err.println("!!! [Controller] Error al guardar el registro histórico: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error al guardar el registro histórico: " + e.getMessage()));
+                });
+    }
+
+    @Operation(summary = "Obtiene registros históricos de datos meteorológicos para una ubicación.",
+            description = "Recupera los registros históricos de datos meteorológicos para una latitud y longitud dadas.",
+            parameters = {
+                    @Parameter(name = "latitude", description = "Latitud de la ubicación", required = true, example = "-33.4489"),
+                    @Parameter(name = "longitude", description = "Longitud de la ubicación", required = true, example = "-70.6693"),
+                    @Parameter(name = "limit", description = "Número máximo de registros a recuperar (por defecto: 10)", required = false, example = "5")
+            })
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Registros históricos obtenidos exitosamente",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(type = "array", implementation = HistoricalWeatherEntry.class))),
+            @ApiResponse(responseCode = "400", description = "Parámetros de latitud o longitud inválidos",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor al recuperar registros",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @GetMapping("/historical")
+    public Mono<ResponseEntity<List<HistoricalWeatherEntry>>> getHistoricalData(
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+            @RequestParam(defaultValue = "10") int limit) { // Por defecto, obtener 10 registros
+
+        System.out.println(">>> [Controller] Solicitud de registros históricos para lat: " + latitude + ", lon: " + longitude + " con límite: " + limit);
+
+        return firebaseRealtimeService.getHistoricalWeatherEntries(latitude, longitude, limit)
+                .map(entries -> {
+                    System.out.println("<<< [Controller] Registros históricos obtenidos: " + entries.size());
+                    return ResponseEntity.ok(entries);
+                })
+                .onErrorResume(e -> {
+                    System.err.println("!!! [Controller] Error al obtener registros históricos: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of())); // Retorna lista vacía en caso de error
                 });
     }
 }

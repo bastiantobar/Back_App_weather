@@ -1,9 +1,6 @@
 package com.back.tfm.weatherapp.service;
 
-import com.back.tfm.weatherapp.model.HourlyForecast;
-import com.back.tfm.weatherapp.model.InstantWeather;
-import com.back.tfm.weatherapp.model.WindMap;
-import com.back.tfm.weatherapp.model.WindMapPoint;
+import com.back.tfm.weatherapp.model.*;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.ValueEventListener;
@@ -17,6 +14,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule; // ¡Importa esto para tipos de fecha Java 8!
@@ -235,4 +233,92 @@ public class FirebaseRealtimeService {
                 })
         );
     }
-}
+    /**
+     * Guarda una entrada de datos meteorológicos históricos en Firebase Realtime Database.
+     * Genera un ID único para cada entrada.
+     * Ahora serializa el objeto HistoricalWeatherEntry a un Map<String, Object>
+     * usando ObjectMapper para asegurar el formato correcto de Instant.
+     *
+     * @param entry La entrada de datos históricos a guardar.
+     * @return Mono<String> que emite el ID generado para la entrada guardada.
+     */
+    public Mono<String> saveHistoricalWeatherEntry(HistoricalWeatherEntry entry) {
+        return Mono.fromFuture(
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        // Generar una nueva clave push única para el registro histórico
+                        DatabaseReference newEntryRef = databaseReference.child("historical_weather_entries").push();
+                        String entryId = newEntryRef.getKey();
+                        entry.setId(entryId); // Asigna el ID generado al objeto
+
+                        // *** CAMBIO CLAVE AQUÍ: Serializa el objeto a un Map<String, Object> ***
+                        // Esto fuerza a Jackson a usar las anotaciones @JsonFormat y @JsonSerialize
+                        // antes de que el SDK de Firebase lo envíe.
+                        Map<String, Object> entryMap = objectMapper.convertValue(entry, Map.class);
+
+                        // Establecer el valor de la nueva entrada usando el mapa serializado
+                        newEntryRef.setValueAsync(entryMap); // Pasa el mapa en lugar del objeto directamente
+                        System.out.println("--- [FirebaseRealtimeService] Saved historical weather entry with ID: " + entryId);
+                        return entryId;
+                    } catch (Exception e) {
+                        System.err.println("!!! [FirebaseRealtimeService] Error saving historical weather entry to Firebase: " + e.getMessage());
+                        throw new RuntimeException("Failed to save historical weather entry", e);
+                    }
+                })
+        );
+    }
+
+    /**
+     * Recupera entradas de datos meteorológicos históricos para una ubicación específica.
+     * (Este método ya debería estar correcto con la lógica de filtrado en memoria)
+     *
+     * @param latitude La latitud de la ubicación.
+     * @param longitude La longitud de la ubicación.
+     * @param limit El número máximo de entradas a recuperar (por defecto 10).
+     * @return Mono<List<HistoricalWeatherEntry>> que emite una lista de entradas históricas.
+     */
+    public Mono<List<HistoricalWeatherEntry>> getHistoricalWeatherEntries(double latitude, double longitude, int limit) {
+        return Mono.create(sink -> {
+            databaseReference.child("historical_weather_entries")
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(DataSnapshot dataSnapshot) {
+                            List<HistoricalWeatherEntry> allEntries = new ArrayList<>();
+                            if (dataSnapshot.exists()) {
+                                for (DataSnapshot entrySnapshot : dataSnapshot.getChildren()) {
+                                    try {
+                                        // La deserialización aquí debería funcionar si el data está en el formato de string
+                                        HistoricalWeatherEntry entry = objectMapper.convertValue(entrySnapshot.getValue(), HistoricalWeatherEntry.class);
+                                        allEntries.add(entry);
+                                    } catch (Exception e) {
+                                        System.err.println("!!! [FirebaseRealtimeService] Error deserializing historical entry: " + e.getMessage() + " for snapshot: " + entrySnapshot.getKey());
+                                        // No abortar, solo ignorar la entrada corrupta
+                                    }
+                                }
+                            }
+
+                            List<HistoricalWeatherEntry> filteredEntries = allEntries.stream()
+                                    .filter(entry -> entry.getLocation() != null &&
+                                            Math.abs(entry.getLocation().getLatitude() - latitude) < 0.000001 &&
+                                            Math.abs(entry.getLocation().getLongitude() - longitude) < 0.000001)
+                                    .collect(Collectors.toList());
+
+                            filteredEntries.sort(Comparator.comparing(HistoricalWeatherEntry::getRecordedAt).reversed());
+
+                            List<HistoricalWeatherEntry> limitedEntries = filteredEntries.stream()
+                                    .limit(limit)
+                                    .collect(Collectors.toList());
+
+                            System.out.println("--- [FirebaseRealtimeService] Fetched " + limitedEntries.size() + " historical entries for " + latitude + "," + longitude + " (from " + filteredEntries.size() + " filtered)");
+                            sink.success(limitedEntries);
+                        }
+
+                        @Override
+                        public void onCancelled(DatabaseError databaseError) {
+                            System.err.println("!!! [FirebaseRealtimeService] Database error fetching historical entries: " + databaseError.getMessage());
+                            sink.error(new RuntimeException("Error al leer registros históricos", databaseError.toException()));
+                        }
+                    });
+        });
+    }
+   }
