@@ -33,21 +33,6 @@ public class FirebaseRealtimeService {
         this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
-    public void saveInstantWeather(InstantWeather weather) {
-        String key = databaseReference.child("InstantWeather").push().getKey();
-        databaseReference.child("InstantWeather").child(key).setValueAsync(weather);
-    }
-    public void saveHourlyForecasts(List<HourlyForecast> forecasts) {
-        DatabaseReference ref = databaseReference.child("HourlyForecasts");
-        for (HourlyForecast forecast : forecasts) {
-            String key = ref.push().getKey();
-            ref.child(key).setValueAsync(forecast);
-        }
-    }
-    public void saveWindMap(WindMap windMap) {
-        String key = databaseReference.child("WindMaps").push().getKey();
-        databaseReference.child("WindMaps").child(key).setValueAsync(windMap);
-    }
     public Mono<List<HourlyForecast>> getAllHourlyForecasts() {
         return fetchFromFirebase("HourlyForecasts", HourlyForecast.class);
     }

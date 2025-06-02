@@ -15,12 +15,8 @@ public class TranslationService {
 
     private Translate translate;
 
-    // @PostConstruct se ejecuta después de que Spring ha inyectado las dependencias y los valores de @Value
     @PostConstruct
     public void init() {
-        // Inicializa el cliente de Google Translate con tu clave de API
-        // Para entornos de producción, considera usar Service Accounts en lugar de API Keys directamente.
-        // https://cloud.google.com/docs/authentication/production
         this.translate = TranslateOptions.newBuilder().setApiKey(googleTranslationApiKey).build().getService();
         System.out.println("--- [TranslationService] Google Cloud Translation API cliente inicializado.");
     }
@@ -47,8 +43,8 @@ public class TranslationService {
             return translation.getTranslatedText();
         } catch (Exception e) {
             System.err.println("!!! [TranslationService] Error al traducir el texto: " + e.getMessage());
-            e.printStackTrace(); // Imprime la pila de llamadas para depuración
-            return text; // Retorna el texto original en caso de error
+            e.printStackTrace();
+            return text;
         }
     }
 }

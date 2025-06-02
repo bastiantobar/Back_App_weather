@@ -363,18 +363,5 @@ public class WeatherService {
         }
     }
 
-    public Mono<byte[]> getMeteogramAsBytes() {
-        String path = "en/content/2-3117735/meteogram.svg?mode=dark";
-        System.out.println("--- [WeatherService] Llamando a Yr.no para meteograma con path: " + path);
 
-        return yrNoWebClient.get()
-                .uri(path)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> {
-                    System.err.println("!!! [WeatherService] Error al obtener el meteograma de Yr.no: " + response.statusCode());
-                    return Mono.error(new RuntimeException("Error al obtener el meteograma: " + response.statusCode()));
-                })
-                .bodyToMono(byte[].class)
-                .doOnError(e -> System.err.println("!!! [WeatherService] Error en la llamada a Yr.no para meteograma: " + e.getMessage()));
-    }
 }

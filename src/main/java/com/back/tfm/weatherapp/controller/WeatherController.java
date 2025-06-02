@@ -39,26 +39,7 @@ public class WeatherController {
         this.geocodingService = geocodingService;
     }
 
-    @Operation(
-            summary = "Obtener el último dato de clima instantáneo",
-            description = "Devuelve el último registro de clima instantáneo almacenado en Firebase."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Dato obtenido exitosamente",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = "{ \"temperature\": 25.5, \"humidity\": 80, \"windSpeed\": 15 }"),
-                            schema = @Schema(implementation = InstantWeather.class))),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
-                    content = @Content(mediaType = "application/json"))
-    })
-    @GetMapping("/instant/last")
-    public Mono<ResponseEntity<InstantWeather>> getLastInstantWeather() {
-        return firebaseRealtimeService.getLastInstantWeather()
-                .map(ResponseEntity::ok)
-                .onErrorResume(e -> Mono.just(ResponseEntity
-                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .build()));
-    }
+
 
     @GetMapping("/hourly")
     @Operation(
@@ -106,45 +87,6 @@ public class WeatherController {
                 .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).<WindMap>build())); // Especificación explícita del tipo
     }
 
-    @Operation(
-            summary = "Obtener el gráfico meteorológico (meteograma)",
-            description = "Devuelve un gráfico meteorológico en formato SVG para Madrid."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Gráfico obtenido exitosamente",
-                    content = @Content(mediaType = "image/svg+xml",
-                            schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "401", description = "No autorizado, falta autenticación",
-                    content = @Content(mediaType = "application/json")),
-            @ApiResponse(responseCode = "404", description = "Recurso no encontrado",
-                    content = @Content(mediaType = "application/json")),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
-                    content = @Content(mediaType = "application/json"))
-    })
-    @GetMapping("/grafic")
-    public Mono<ResponseEntity<byte[]>> getMeteogramAsBytes() {
-        return weatherService.getMeteogramAsBytes()
-                .map(bytes -> ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_TYPE, "image/svg+xml")
-                        .body(bytes))
-                .onErrorResume(e -> {
-                    try {
-                        Map<String, String> errorResponse = Map.of(
-                                "error", "Error al obtener el meteograma",
-                                "message", e.getMessage()
-                        );
-                        byte[] errorJson = new ObjectMapper().writeValueAsBytes(errorResponse);
-
-                        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                                .body(errorJson));
-                    } catch (Exception ex) {
-                        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                                .body(("{\"error\":\"Error interno\"}").getBytes()));
-                    }
-                });
-    }
 
     @Operation(summary = "Obtiene un reporte meteorológico completo (actuales, pronóstico por hora, mapa de viento y calidad del aire) para una ubicación específica.",
             description = "Combina llamadas a servicios de geocodificación y pronóstico meteorológico para proporcionar un conjunto completo de datos. Incluye manejo de caché para mejorar el rendimiento.")
@@ -209,25 +151,6 @@ public class WeatherController {
                 });
     }
 
-    @Operation(summary = "Obtiene el meteograma de Yr.no como imagen SVG.",
-            description = "Devuelve un archivo SVG que representa el meteograma de pronóstico.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Meteograma obtenido exitosamente",
-                    content = @Content(mediaType = "image/svg+xml")),
-            @ApiResponse(responseCode = "500", description = "Error interno del servidor al obtener el meteograma")
-    })
-    @GetMapping("/meteogram")
-    public Mono<ResponseEntity<byte[]>> getMeteogram() {
-        System.out.println("--- [Controller] Recibida solicitud /meteogram ---");
-        return weatherService.getMeteogramAsBytes()
-                .map(svgBytes -> {
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.add(HttpHeaders.CONTENT_TYPE, "image/svg+xml");
-                    return new ResponseEntity<>(svgBytes, headers, HttpStatus.OK);
-                })
-                .doOnError(e -> System.err.println("!!! [Controller] Error al obtener el meteograma: " + e.getMessage()))
-                .onErrorReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
-    }
 
     @Operation(summary = "Obtiene las coordenadas geográficas para una ciudad y país dados.",
             description = "Usa un servicio de geocodificación para convertir un nombre de ciudad y país en latitud y longitud.")
