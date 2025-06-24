@@ -20,7 +20,7 @@ public class AuthService {
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
     @Value("${firebase.api.key}")
     private String firebaseApiKey;
-   // private static final String FIREBASE_API_KEY = "AIzaSyBQ4F2VK9t0dza3J9YX5qvx2DXtinW8u5U";
+
     private static final String FIREBASE_AUTH_URL =
             "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=";
 
